@@ -1,3 +1,6 @@
-yifan:
-  name: Yifan
-  url: https://github.com/geekifan
+synrst:
+  name: "synrst"
+  url: "https://github.com/synack-rm-f"
+  # Tu peux généralement ajouter d'autres options si le thème le supporte :
+  # avatar: "/assets/img/avatar.png"
+  # bio: "Pentester / Red Teamer"
