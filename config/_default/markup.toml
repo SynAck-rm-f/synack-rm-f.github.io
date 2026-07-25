@@ -22,3 +22,4 @@
 
 [goldmark.renderer]
   unsafe = true
+

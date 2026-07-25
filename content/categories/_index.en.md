@@ -1,5 +1,6 @@
 ---
 title: "Categories"
+draft: true
 menu:
   main:
     name: Categories

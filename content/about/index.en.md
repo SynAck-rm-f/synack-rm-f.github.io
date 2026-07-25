@@ -1,7 +1,7 @@
 ---
 title: "About"
 date: 2023-04-20
-draft: false
+draft: true
 layout: page
 menu:
   main:

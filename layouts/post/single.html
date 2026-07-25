@@ -6,15 +6,12 @@
   <article class="px-1" data-toc="{{ $enable_toc }}">
     <header>
       <h1 data-toc-skip>{{ .Title }}</h1>
-      {{ with .Description }}
-        <p class="post-desc fw-light mb-4">{{ . }}</p>
-      {{ end }}
+      
 
       <div class="post-meta text-muted">
         <!-- published date -->
         <span>
-          {{ i18n "post.posted" }}
-          {{ partial "datetime.html" (dict "date" .Date "tooltip" true "lang" $lang) }}
+          
         </span>
 
         <!-- lastmod date -->
@@ -42,58 +39,6 @@
             {{- end -}}
           </div>
         {{ end }}
-
-        <div class="d-flex justify-content-between">
-          <!-- author(s) -->
-          <span>
-            {{ $authors := .Params.author | default .Params.authors | default .Site.Params.author | default .Site.Params.authors }}
-            {{ if not (reflect.IsSlice $authors) }}
-              {{ $authors = slice $authors }}
-            {{ end }}
-            {{ $authorsData := index $.Site.Data.authors .Site.LanguageCode | default $.Site.Data.authors }}
-
-
-            {{ i18n "post.written_by" }}
-
-            <em>
-              {{ if $authors }}
-                {{ range $i, $author := $authors }}
-                  {{ with $authorsData }}
-                    {{ with (index . $author) }}
-                      {{ if .url }}
-                        <a href="{{ .url }}">{{ .name }}</a>
-                      {{ else }}
-                        {{ .name }}
-                      {{ end }}
-                    {{ end }}
-                  {{ else }}
-                    {{ $author }}
-                  {{ end }}
-                  {{ if not (eq $i (sub (len $authors) 1)) }}{{ "</em>, <em>" | safeHTML }}{{ end }}
-                {{ end }}
-              {{ else }}
-                <a href="{{ index $.Site.Params.Social.links 0 }}">{{ $.Site.Params.Social.name }}</a>
-              {{ end }}
-            </em>
-          </span>
-
-          <div>
-            <!-- pageviews -->
-            {{ if and $.Site.Params.pageviews.provider $.Site.Params.analytics (index $.Site.Params.analytics $.Site.Params.pageviews.provider) }}
-              <span>
-                <em id="pageviews">
-                  <i class="fas fa-spinner fa-spin small"></i>
-                </em>
-                {{ i18n "post.pageview_measure" }}
-              </span>
-            {{ end }}
-
-            <!-- read time -->
-            {{ partial "read-time.html" (dict "content" .Content "prompt" true "lang" $lang) }}
-
-          </div>
-        </div>
-      </div>
     </header>
 
     {{ if $enable_toc }}
@@ -161,10 +106,6 @@
 
       <div class="post-tail-bottom d-flex justify-content-between align-items-center mt-5 pb-2">
         <div class="license-wrapper">
-          {{ with (i18n "copyright.license.template") }}
-            {{ $replacement := printf `<a href="%s">%s</a>` (i18n "copyright.license.link") (i18n "copyright.license.name") }}
-            {{ replace . ":LICENSE_NAME" $replacement | safeHTML }}
-          {{ end }}
         </div>
 
       </div>

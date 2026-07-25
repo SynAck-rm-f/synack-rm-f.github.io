@@ -24,19 +24,4 @@
       {{- T "copyright.brief" -}}
     </span>
   </p>
-
-  <p>
-    {{- $platform := `<a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a>` -}}
-
-    {{- $theme := printf `<a
-        data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        title="v%s"
-        href="https://github.com/geekifan/hugo-theme-chirpy"
-        target="_blank"
-        rel="noopener"
-      >Chirpy</a>` .Site.Params.theme_version -}}
-
-    {{ T "meta" | replaceRE ":PLATFORM" $platform | replaceRE ":THEME" $theme | safeHTML }}
-  </p>
 </footer>

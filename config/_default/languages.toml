@@ -2,9 +2,9 @@
   languageName = "English"
   languageCode = "en"
   weight = 2
-  title = "synack"
+  title = "SynRst"
   [en.params]
-    tagline = "A text-focused blog theme"
+    tagline = "Security Research and Technical Notes"
 
 [zh-CN]
   languageName = "中文"
