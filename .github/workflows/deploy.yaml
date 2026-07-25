@@ -15,26 +15,25 @@ jobs:
       contents: write
 
     steps:
-      # Blog
+      # 1. Blog extrait à la racine par défaut
       - name: Checkout Blog
         uses: actions/checkout@v4
         with:
-          path: blog
           fetch-depth: 0
 
-      # Vault Obsidian
+      # 2. Vault extrait en dehors du dossier du blog (au niveau parent)
       - name: Checkout Vault
         uses: actions/checkout@v4
         with:
           repository: SynAck-rm-f/vault-obsidian-backup
-          path: vault-obsidian-backup
+          path: ../vault-obsidian-backup
           token: ${{ secrets.VAULT_PAT }}
           ref: main
 
       - name: Cache Hugo resources
         uses: actions/cache@v4
         with:
-          path: blog/resources
+          path: resources
           key: ${{ runner.os }}-hugo
 
       - name: Setup Dart Sass
@@ -52,14 +51,12 @@ jobs:
           extended: true
 
       - name: Build
-        working-directory: blog
         run: hugo --gc --minify
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
-          folder: blog/public
-          workspace: blog
+          folder: public
           clean: true
           single-commit: true
