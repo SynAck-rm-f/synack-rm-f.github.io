@@ -15,20 +15,23 @@ jobs:
       contents: write
 
     steps:
-      # 1. Blog extrait à la racine par défaut
       - name: Checkout Blog
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Vault extrait en dehors du dossier du blog (au niveau parent)
+      # Checkout à l'intérieur du workspace
       - name: Checkout Vault
         uses: actions/checkout@v4
         with:
           repository: SynAck-rm-f/vault-obsidian-backup
-          path: ../vault-obsidian-backup
+          path: vault-obsidian-backup
           token: ${{ secrets.VAULT_PAT }}
           ref: main
+
+      # Création du lien symbolique pour satisfaire le chemin relative ../ de hugo.toml
+      - name: Create symlink for Hugo relative paths
+        run: ln -s "${PWD}/vault-obsidian-backup" "../vault-obsidian-backup"
 
       - name: Cache Hugo resources
         uses: actions/cache@v4
