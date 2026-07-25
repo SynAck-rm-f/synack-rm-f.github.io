@@ -60,5 +60,6 @@ jobs:
         with:
           branch: gh-pages
           folder: blog/public
+          workspace: blog
           clean: true
           single-commit: true
