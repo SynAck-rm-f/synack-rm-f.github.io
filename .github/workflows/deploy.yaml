@@ -25,8 +25,10 @@ jobs:
       - name: Checkout Vault
         uses: actions/checkout@v4
         with:
-          repository: SynAck-rm-f/vault-obsidian-backup
-          path: vault-obsidian-backup
+	  repository: SynAck-rm-f/vault-obsidian-backup
+	  path: vault-obsidian-backup
+	  token: ${{ secrets.VAULT_PAT }}
+	  ref: main # Évite l'appel d'auto-détection si désiré
 
       - name: Cache Hugo resources
         uses: actions/cache@v4
