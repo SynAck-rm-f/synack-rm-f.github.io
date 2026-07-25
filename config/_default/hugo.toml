@@ -31,7 +31,7 @@ hasCJKLanguage = true
 
   # Tu montes ensuite ton dossier Obsidian externe vers le dossier virtuel content/post
   [[module.mounts]]
-    source = "/home/nabiasa/Desktop/vault-obsidian-backup-main/01-Write UP Box & Blog/link"
+    source = "../vault-obsidian-backup-main/01-Write UP Box & Blog/link"
     target = "content/post"
 
   [[module.mounts]]
@@ -39,7 +39,7 @@ hasCJKLanguage = true
     target = "assets"
 
   [[module.mounts]]
-    source = "/home/nabiasa/Desktop/vault-obsidian-backup-main/res"
+    source = "../vault-obsidian-backup-main/res"
     target = "assets/res"
 
  
