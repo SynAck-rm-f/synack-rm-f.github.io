@@ -50,13 +50,6 @@ jobs:
           hugo-version: latest
           extended: true
 
-      - name: Debug
-        run: |
-          pwd
-          ls -la
-          ls -la vault
-          ls -la "vault/01-Write UP Box & Blog"
-
       - name: Build
         run: hugo --gc --minify
 
