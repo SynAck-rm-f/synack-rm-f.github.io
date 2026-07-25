@@ -19,6 +19,7 @@ jobs:
       - name: Checkout Blog
         uses: actions/checkout@v4
         with:
+          path: blog
           fetch-depth: 0
 
       # Vault Obsidian
@@ -33,7 +34,7 @@ jobs:
       - name: Cache Hugo resources
         uses: actions/cache@v4
         with:
-          path: resources
+          path: blog/resources
           key: ${{ runner.os }}-hugo
 
       - name: Setup Dart Sass
@@ -51,12 +52,13 @@ jobs:
           extended: true
 
       - name: Build
+        working-directory: blog
         run: hugo --gc --minify
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
-          folder: public
+          folder: blog/public
           clean: true
           single-commit: true
