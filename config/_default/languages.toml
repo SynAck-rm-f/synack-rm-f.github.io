@@ -1,14 +1,14 @@
 [en]
-  languageName = "English"
-  languageCode = "en"
+  label = "English"
+  locale = "en"
   weight = 2
   title = "SynRst"
   [en.params]
     tagline = "Security Research and Technical Notes"
 
 [zh-CN]
-  languageName = "中文"
-  languageCode = "zh-CN"
+  label = "中文"
+  locale = "zh-CN"
   weight = 1
   title = "synack"
   [zh-CN.params]
